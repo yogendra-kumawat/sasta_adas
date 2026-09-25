@@ -1,4 +1,4 @@
-# PURNANSH ADAS
+# DRIVOMATE ADAS
 
 Smartphone-based rider assistance prototype. Vehicle and pedestrian detection runs
 on-device with **YOLO11n** (Ultralytics, COCO-80) via onnxruntime-web.
@@ -15,7 +15,7 @@ say so explicitly rather than failing silently.
 
     git init
     git add index.html models/yolo11n.onnx .nojekyll README.md
-    git commit -m "Purnansh ADAS"
+    git commit -m "DrivoMate ADAS"
     git branch -M main
     git remote add origin https://github.com/<you>/<repo>.git
     git push -u origin main

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#080808">
-<title>PURNANSH ADAS</title>
+<title>DRIVOMATE ADAS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -74,7 +74,10 @@ h1,h2,h3,p{margin:0}
 #s-welcome{display:none;padding:0}
 #s-welcome.on{display:flex;flex-direction:column;justify-content:space-between;padding:28px 24px 28px}
 .mark{margin:auto 0;padding:34px 22px}
-.mark .disp{font-size:clamp(64px,21vw,112px);text-transform:uppercase;font-weight:800;line-height:.86}
+/* Starting size only. fitWordmark() shrinks it if the name is too wide for the box --
+   the width depends on the brand name AND on whether the condensed webfont loaded, so it
+   cannot be settled in CSS alone. */
+.mark .disp{font-size:clamp(46px,21vw,112px);text-transform:uppercase;font-weight:800;line-height:.88;white-space:nowrap}
 .mark .tag{font-family:var(--disp);font-weight:600;font-size:26px;color:var(--acc);letter-spacing:.06em;margin-top:18px;text-transform:uppercase}
 .prog{display:flex;gap:4px;margin-bottom:26px}
 .prog i{flex:1;height:4px;background:var(--line)}.prog i.d{background:var(--acc)}.prog i.c{background:#fff}
@@ -245,6 +248,21 @@ input[type=range]::-moz-range-thumb{width:18px;height:26px;background:var(--acc)
 .legend .lg b{margin-left:auto;font-family:var(--disp);font-size:17px;font-variant-numeric:tabular-nums}
 .legend .lg .mute{min-width:44px;text-align:right;font-size:13px}
 .legend .lgsw{width:12px;height:12px;border-radius:2px;flex:none}
+
+/* ---------- "you are here" zone card ---------- */
+.zonecard{border:1px solid var(--line);border-left-width:3px;background:var(--surf);padding:13px 14px;margin-top:12px}
+.zonecard.lvl4{border-left-color:var(--lv4)}.zonecard.lvl3{border-left-color:var(--lv3)}.zonecard.lvl2{border-left-color:var(--lv2)}
+.zonecard.out{border-left-color:var(--mute)}
+.zonecard .zt{font-family:var(--disp);font-weight:700;font-size:21px;letter-spacing:.04em}
+.zonecard.lvl4 .zt{color:var(--lv4)}.zonecard.lvl3 .zt{color:var(--lv3)}.zonecard.lvl2 .zt{color:var(--lv2)}
+.zonecard .zs{font-size:13px;color:var(--mute);margin-top:2px}
+.zonecard .zr{padding:9px 0 8px;border-bottom:1px solid var(--line)}
+.zonecard .zr:last-of-type{border-bottom:0}
+.zonecard .zk{font-size:13px;color:var(--mute)}
+.zonecard .zv{font-family:var(--disp);font-weight:700;font-size:21px;letter-spacing:.03em;line-height:1.1;margin-top:1px;overflow-wrap:anywhere}
+.zonecard .zn{font-size:12px;color:var(--mute);margin-top:2px}
+.zonecard .zf{font-size:12px;color:var(--mute);margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
+.livebar .tele .zlv4{color:var(--lv4)}.livebar .tele .zlv3{color:var(--lv3)}.livebar .tele .zlv2{color:var(--lv2)}
 </style>
 </head>
 <body>
@@ -254,7 +272,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:26px;background:var(--acc)
   <section id="s-welcome" class="screen">
     <div class="wm mute" style="font-size:15px">EXPERIMENTAL PROTOTYPE</div>
     <div class="mark brk">
-      <div class="disp">PURNANSH<br>ADAS</div>
+      <div class="disp">DRIVOMATE<br>ADAS</div>
       <div class="tag">Smart Vision. Safer Rides.</div>
     </div>
     <div class="stack">
@@ -299,6 +317,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:26px;background:var(--acc)
       <div class="tele"><span id="tRoad">Road —</span></div>
       <div class="tele"><span id="tLead">Lead —</span><span id="tGps" class="num"></span></div>
       <div class="tele"><span id="tTrack">Tracking —</span></div>
+      <div class="tele"><span id="tZone"></span></div>
       <div class="row">
         <button class="btn dng fill grow" data-act="end" style="min-height:56px;font-size:20px">END SAFETY MODE</button>
         <button class="btn sm" data-act="dash" style="min-height:56px">Dashboard</button>
@@ -372,7 +391,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:26px;background:var(--acc)
 </div>
 
 <script>
-/* ===================== PURNANSH ADAS — CORE ENGINE (no DOM) ===================== */
+/* ===================== DRIVOMATE ADAS — CORE ENGINE (no DOM) ===================== */
 'use strict';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const avg = a => a.reduce((s, v) => s + v, 0) / (a.length || 1);
@@ -415,9 +434,10 @@ const ALERTS = {
   sudden_accel:    { level: 2, icon: '⚠️', title: 'SUDDEN ACCELERATION', sub: 'MOTION SENSOR', say: '', label: 'Sudden Acceleration' },
   sudden_turn:     { level: 2, icon: '⚠️', title: 'SUDDEN DIRECTION CHANGE', sub: 'MOTION SENSOR', say: '', label: 'Sudden Direction Change' },
   over_limit:      { level: 2, icon: '⚠️', title: 'SPEED ABOVE LIMIT', sub: 'OPENSTREETMAP LIMIT', say: '', label: 'Speed Above Limit' },
+  zone_entry:      { level: 2, icon: '⚠️', title: 'RECORDED RISK AREA', sub: 'FROM YOUR FIELD DATA', say: '', label: 'Entered Risk Area' },
   unusual:         { level: 1, icon: 'ℹ️', title: 'UNUSUAL RIDING EVENT', sub: 'RECORDED FOR REVIEW', say: '', label: 'Unusual Riding Event' },
   vehicle_info:    { level: 1, icon: 'ℹ️', title: 'VEHICLE DETECTED', sub: '', say: '', label: 'Vehicle Detected', store: false },
-  voice_test:      { level: 1, icon: '🔊', title: 'VOICE ALERT TEST', sub: 'AUDIO CHECK', say: 'Purnansh ADAS voice alert test.', label: 'Voice Test' }
+  voice_test:      { level: 1, icon: '🔊', title: 'VOICE ALERT TEST', sub: 'AUDIO CHECK', say: 'DrivoMate ADAS voice alert test.', label: 'Voice Test' }
 };
 const LEVELS = { 1: 'Information', 2: 'Caution', 3: 'Warning', 4: 'Critical' };
 
@@ -707,7 +727,7 @@ class DemoSource {
 
 if (typeof module !== 'undefined') module.exports = { CameraModel, Tracker, RiskEngine, AlertManager, MotionEngine, PatternEngine, DemoSource, SCENARIOS, ALERTS, SENS, REAL_SIZE, TRACKED, VEHICLE, OBSTACLE, LEVELS, mulberry32, randn, clamp, inPathTest, inPathHalfWidth, CENTRE_BAND };
 
-/* ===================== PURNANSH ADAS — MAP / ROAD CONTEXT (OpenStreetMap data, no DOM) ===================== */
+/* ===================== DRIVOMATE ADAS — MAP / ROAD CONTEXT (OpenStreetMap data, no DOM) ===================== */
 const DRIVABLE = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'service', 'road', 'track']);
 const CLASS_FAST = new Set(['motorway', 'motorway_link', 'trunk', 'trunk_link']);
 const CLASS_URBAN = new Set(['residential', 'living_street', 'service', 'tertiary', 'tertiary_link', 'unclassified']);
@@ -785,7 +805,7 @@ if (typeof module !== 'undefined') module.exports = { Geo, RoadContext, DRIVABLE
 
 </script>
 <script>
-/* ===================== PURNANSH ADAS — PLATFORM LAYER ===================== */
+/* ===================== DRIVOMATE ADAS — PLATFORM LAYER ===================== */
 'use strict';
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
@@ -793,7 +813,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 const nowS = () => performance.now() / 1000;
 const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const KMH = 3.6;
-const APP_NAME = 'PURNANSH ADAS';
+const APP_NAME = 'DRIVOMATE ADAS';
 
 /* ---------- real field-test ride (embedded verbatim from an actual ADAS hardware unit's
  * field log: trip_2026-09-10.xlsx, "Hutesh" sheet, Jaipur field tests, Sep 2026. This is a
@@ -836,6 +856,8 @@ function seedFieldRide() {
 
 /* ---------- local database (offline-first). Entities mirror the future backend schema ---------- */
 const Store = {
+  // Storage namespace deliberately unchanged across the rename: it is invisible to the
+  // rider, and renaming it would orphan every saved ride, event and setting on their phone.
   ns: 'purnansh-adas:v1:', mem: {},
   get(k, d) { try { const v = localStorage.getItem(this.ns + k); if (v != null) return JSON.parse(v); } catch (e) {} return k in this.mem ? this.mem[k] : d; },
   set(k, v) { this.mem[k] = v; try { localStorage.setItem(this.ns + k, JSON.stringify(v)); } catch (e) {} },
@@ -863,7 +885,8 @@ const DEFAULTS = {
   frontCamera: true, lens: 'environment', resolution: 'auto', fps: 'auto', fov: 65, power: 'balanced',
   demoMode: false, storeEvents: true, storeStats: true, retention: 30, upload: false, setupDone: false,
   storeTrack: true, roadLookup: true, mapFollow: true, mapEvents: true, tileUrl: '',
-  zoneVisible: true, zonePts: null
+  zoneVisible: true, zonePts: null,
+  zoneAware: true, zoneCard: true, zoneAlert: true, zoneSpeed: true, zoneTraffic: true, zoneNearSort: true
 };
 
 /* ---------- base map tiles ----------
@@ -1196,7 +1219,7 @@ const Detector = {
 const Roads = new RoadContext((u, o) => window.fetch(u, o));
 const LEAFLET_URL = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
 
-/* ===================== PURNANSH ADAS — SESSION · ENGINE · STAGE ===================== */
+/* ===================== DRIVOMATE ADAS — SESSION · ENGINE · STAGE ===================== */
 const haversine = (a, b) => { const R = 6371000, r = Math.PI / 180, dLa = (b.latitude - a.latitude) * r, dLo = (b.longitude - a.longitude) * r; const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.latitude * r) * Math.cos(b.latitude * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
 const COUNTED = t => t !== 'voice_test' && t !== 'vehicle_info';
 
@@ -1326,7 +1349,7 @@ const Safety = {
       Session.start(demo); this.b0 = !demo && Sensors.battery.level != null ? { l: Sensors.battery.level, t: Date.now() } : null; UI.mountStage($('#liveHost')); Engine.start(demo ? 'demo' : 'camera');
       if (!demo) {
         Sensors.onSample = (t, a, y) => { Sensors.motion.aLong = a; if (Engine.running && Engine.source === 'camera') Engine.motion.feed(t, a, y); };
-        Sensors.onPos = (c, ts) => { Session.onPos(c, ts); Roads.update(c, { enabled: Settings.v.roadLookup, online: navigator.onLine }); MapView.onFix(c); };
+        Sensors.onPos = (c, ts) => { Session.onPos(c, ts); Roads.update(c, { enabled: Settings.v.roadLookup, online: navigator.onLine }); MapView.onFix(c); Local.update(c); };
         Sensors.startGps(); Sensors.startMotion(); Sensors.lockScreen(); if (Sensors.camera.stream) Detector.load();
       }
       this.active = true; Notify.show(APP_NAME, 'Safety mode active'); UI.go('live');
@@ -1445,7 +1468,7 @@ function drawBoxes(f) {
   }
 }
 
-/* ===================== PURNANSH ADAS — INTERFACE ===================== */
+/* ===================== DRIVOMATE ADAS — INTERFACE ===================== */
 const svg = p => `<svg viewBox="0 0 24 24">${p}</svg>`;
 const ICON = {
   camera: svg('<path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/>'),
@@ -1472,6 +1495,7 @@ const UI = {
   go(name) {
     const prev = this.cur; if (prev === 'demo' && name !== 'demo') this.leaveDemo();
     if (['about', 'danger', 'speed', 'traffic'].includes(name)) this.from = prev === name ? this.from : prev;
+    if (name === 'welcome') setTimeout(fitWordmark, 0);
     this.cur = name;
     $$('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + name));
     $('#tabs').classList.toggle('on', this.tabbed.has(name));
@@ -1527,6 +1551,7 @@ const UI = {
       const veh = Engine.ovTracks.filter(tr => VEHICLE.has(tr.label) && tr.dS != null).sort((a, b) => a.dS - b.dS);
       set('#tLead', veh.length ? veh.length + ' vehicle' + (veh.length > 1 ? 's' : '') + ' tracked · nearest ≈ ' + Math.round(veh[0].dS) + ' m · none in path' : 'No vehicle ahead');
     }
+    { const zl = Local.line(); const el = $('#tZone'); if (el) { el.parentElement.style.display = zl ? '' : 'none'; el.innerHTML = esc(zl); el.className = Local.zone ? 'zlv' + Local.zone.level : ''; } }
     // What the detector is actually seeing right now, alerts or not.
     const trk = Engine.ovTracks.filter(tr => tr.dS != null);
     set('#tTrack', trk.length
@@ -1567,6 +1592,21 @@ function visionState() {
   if (Detector.state === 'failed') return ['warn', 'Unavailable'];
   return ['', 'Not loaded'];
 }
+
+/* Shrink the welcome wordmark until it fits its box. Needed because the rendered width of
+ * the name depends on the brand string and on whether the condensed webfont actually
+ * loaded -- on a slow or offline first run the fallback is far wider, and a CSS clamp
+ * tuned for one of those cases clips in the other. */
+function fitWordmark() {
+  const el = $('#s-welcome .disp'); if (!el) return;
+  el.style.fontSize = '';
+  let size = parseFloat(getComputedStyle(el).fontSize);
+  // el.scrollWidth > el.clientWidth is the overflow test on the element itself; comparing
+  // against the PARENT's clientWidth silently includes the parent's padding and never trips.
+  for (let i = 0; i < 60 && size > 18 && el.scrollWidth > el.clientWidth; i++) {
+    size *= 0.94; el.style.fontSize = size.toFixed(1) + 'px';
+  }
+}
 function renderHome() {
   const act = Safety.active, demo = act && Engine.source === 'demo', A = act ? Engine.alerts.current(performance.now()) : null, lv = A ? A.def.level : 0;
   const visOK = demo || Detector.state === 'ready';
@@ -1584,8 +1624,9 @@ function renderHome() {
   if (!navigator.onLine) notices.push('<div class="notice ok">OFFLINE SAFETY MODE. Detection, GPS, motion and voice alerts run on the phone.</div>');
   if (!navigator.onLine && !window.ort && Detector.state !== 'ready') notices.push('<div class="notice">The AI runtime has not been downloaded yet. Vision needs internet once, then the browser can cache it.</div>');
   const html = `
-    <div class="top"><span class="wm">PURNANSH ADAS</span><span class="pill">${act ? '<span class="dot on"></span>SAFETY MODE ACTIVE' : '<span class="dot"></span>SAFETY MODE OFF'}</span></div>
+    <div class="top"><span class="wm">DRIVOMATE ADAS</span><span class="pill">${act ? '<span class="dot on"></span>SAFETY MODE ACTIVE' : '<span class="dot"></span>SAFETY MODE OFF'}</span></div>
     <div class="hero brk ${cls}"><div class="word">${word}</div><div class="cap">${esc(cap)}</div></div>
+    ${Local.card()}
     <div class="speed">${spd}</div>
     <div class="grid2">
       ${demo ? simCell('Camera') : cell('Camera', camS[0], camS[1])}
@@ -1767,7 +1808,7 @@ function renderStatus() {
     ${kv('Floating overlay', '⚠ Unavailable', 'Needs a native Android build. Notifications are the fallback.')}
     ${kv('Blind-spot detection', '⚠ Unavailable', 'Additional camera required. Left and right views are not connected.')}
     ${kv('Lane / path assist', 'EXPERIMENTAL', 'No road-boundary detector is loaded, so this build never raises Check your path from a real camera.')}
-    ${kv('Sensor source', 'PHONE', 'External ADAS hardware mode (DrivoMate) is not connected.')}
+    ${kv('Sensor source', 'PHONE', 'This build reads the phone\u2019s own sensors. The external field unit is not connected.')}
     <div class="sec">Environment</div>
     ${kv('Secure page', window.isSecureContext ? '✓ Yes' : '⚠ No', 'Camera, GPS and motion need a secure page.')}${kv('Embedded view', embedded ? 'YES' : 'NO', embedded ? 'Embedded pages can have camera, location or motion blocked by the host. If a sensor is blocked, open this page directly in your phone browser.' : '')}${kv('Network', off ? 'OFFLINE' : 'ONLINE', off ? 'OFFLINE SAFETY MODE: locally generated alerts still work.' : '')}`;
   const el = $('#s-status'); if (el._h !== html) { const sc = el.scrollTop; el.innerHTML = html; el._h = html; el.scrollTop = sc; }
@@ -1805,13 +1846,20 @@ function renderSettings() {
     ${rng('fov', 'Assumed camera field of view', 50, 90, 1, '°', 'Used only to estimate distance. Not calibrated.')}
     <div class="sec">Map and road data</div>
     ${tog('roadLookup', 'Road data from OpenStreetMap', 'Reads the mapped speed limit and pedestrian crossings near you. Sends your approximate position to an Overpass server. Off = configured limit only.')}
+    <div class="sec">Risk areas from your field data</div>
+    ${tog('zoneAware', 'Use my location against the field data', 'Matches your position to the 68 zones clustered from the real ADAS log. Everything below depends on this.')}
+    ${tog('zoneCard', 'Show where I am', 'A card on Home and a line in the live view naming the zone you are in.', !v.zoneAware)}
+    ${tog('zoneAlert', 'Warn me on entering a high-risk zone', 'Spoken once on entry, level 3 and above only. Needs 6 s inside, and will not repeat the same zone within 2 minutes.', !v.zoneAware)}
+    ${tog('zoneSpeed', 'Suggest a speed for the zone', 'Derived from the typical following distance logged in that zone. Not a legal limit.', !v.zoneAware)}
+    ${tog('zoneTraffic', 'Show typical traffic for the zone', 'Average objects in frame recorded in that zone.', !v.zoneAware)}
+    ${tog('zoneNearSort', 'Sort zone lists by distance', 'Danger Zones and Speed Advisor list the closest first when GPS has a fix.', !v.zoneAware)}
     ${tog('storeTrack', 'Save ride route', 'Route points and event locations stay on this device.')}
     <div class="set col"><div class="l" style="margin-bottom:8px">Map tile server</div><input type="text" value="${esc(v.tileUrl)}" data-cfgtxt="tileUrl" aria-label="Map tile server URL" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="s" style="margin-top:8px">Leave blank for the built-in Esri dark basemap — no API key, but it stops at zoom 16. Paste a keyed provider here (CARTO, Stadia, MapTiler, Thunderforest) for closer zoom. Two things to avoid: <b>tile.openstreetmap.org</b>, whose volunteer servers answer 403 &ldquo;Access blocked&rdquo; to clients that cannot identify themselves — including a page opened from a file or a sandboxed frame — and a keyed URL with the key left out, which some providers answer with a watermarked tile rather than an error. Whatever you set here sees which areas you view. Map data © OpenStreetMap contributors.</div></div>
     <div class="sec">Power</div>
     ${seg('power', 'Power mode', [['performance', 'Performance'], ['balanced', 'Balanced'], ['saver', 'Saver']], pwr)}
     <div class="kv"><div class="k">Estimated battery usage</div><div class="n" style="text-align:right">${esc(usageText())}</div></div>
     <div class="sec">Sensor source</div>
-    ${seg('src', 'Source', [['phone', 'Phone sensors'], ['ext', 'External hardware', true]], 'External ADAS hardware (DrivoMate) is not connected in this build.').replace('data-seg="src" data-v="phone" class=""', 'data-seg="src" data-v="phone" class="on"')}
+    ${seg('src', 'Source', [['phone', 'Phone sensors'], ['ext', 'External hardware', true]], 'The external ADAS field unit \u2014 the hardware the bundled trip data came from \u2014 is not connected in this build.').replace('data-seg="src" data-v="phone" class=""', 'data-seg="src" data-v="phone" class="on"')}
     <div class="sec">Demo</div>
     ${tog('demoMode', 'Demo mode', 'Start Safety Mode with a simulated scene instead of the camera')}
     <div class="sec">Privacy</div>
@@ -1832,7 +1880,7 @@ function renderSettings() {
 /* ---------- ABOUT ---------- */
 function renderAbout() {
   $('#s-about').innerHTML = `<button class="backbtn" data-act="aboutback">‹ Back</button><h1 class="h1">Safety limitations</h1>
-    <p style="margin:14px 0;font-size:17px">Purnansh ADAS is an experimental smartphone-based driver/rider assistance prototype. Camera-based detection and risk estimation can be inaccurate, delayed, or unavailable in some conditions. It is not a certified vehicle safety system and must not replace attentive riding or certified safety equipment.</p>
+    <p style="margin:14px 0;font-size:17px">DrivoMate ADAS is an experimental smartphone-based driver/rider assistance prototype. Camera-based detection and risk estimation can be inaccurate, delayed, or unavailable in some conditions. It is not a certified vehicle safety system and must not replace attentive riding or certified safety equipment.</p>
     <p class="legal">It is not autonomous driving and does not guarantee collision avoidance.</p>
     <div class="sec">What this web build can and cannot do</div>
     <div class="legal stack">
@@ -2000,12 +2048,13 @@ const DangerZones = {
   renderList() {
     const el = $('#dangerList'); if (!el) return;
     const m = DANGER_ZONES.meta;
-    const rows = DANGER_ZONES.zones.map(z => {
+    const [ordered, byDist] = orderByDistance(DANGER_ZONES.zones);
+    const rows = ordered.map(z => {
       const dom = FIELD_ALERTS[z.domType] ? FIELD_ALERTS[z.domType].label : z.domType;
       const breakdown = Object.entries(z.typeCounts).sort((a, b) => b[1] - a[1]).map(([k, v]) => (FIELD_ALERTS[k] ? FIELD_ALERTS[k].label : k) + ' × ' + v).join(' · ');
       const open = this.sel === z.id;
       return `<button class="ev lvl${z.level} ${open ? 'open' : ''}" data-act="zone-select" data-zone="${z.id}">
-        <div class="t">RANK #${z.rank}</div><div class="n">${esc(dom)}</div><div class="t">${LEVELS[z.level]}</div>
+        <div class="t">RANK #${z.rank}${byDist ? ' · ' + fmtDist(z._d) + ' away' : ''}</div><div class="n">${esc(dom)}</div><div class="t">${LEVELS[z.level]}</div>
         <div class="d">${z.n} real alerts logged here (${z.nCritical} critical) · ≈${z.radiusM} m radius · ${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}${z.avgSpeedKmh != null ? ' · typical speed ' + Math.round(z.avgSpeedKmh) + ' km/h (max ' + Math.round(z.maxSpeedKmh) + ')' : ''}<br>${esc(breakdown)}</div>
       </button>`;
     }).join('');
@@ -2039,13 +2088,14 @@ const SpeedAdvisor = {
   select(id) { this.sel = id; this.renderList(); },
   renderList() {
     const el = $('#speedList'); if (!el) return;
-    const rows = SPEED_ADVISOR.zones.map(z => {
+    const [ordered, byDist] = orderByDistance(SPEED_ADVISOR.zones);
+    const rows = ordered.map(z => {
       const open = this.sel === z.id;
       const critLine = (z.t3MedianKmh != null && z.t2MedianKmh != null)
         ? `Critical alerts here: median ${z.t3MedianKmh} km/h · Caution alerts: median ${z.t2MedianKmh} km/h`
         : 'Not enough critical/caution samples in this zone for a speed comparison';
       return `<button class="ev lvl2 ${open ? 'open' : ''}" data-act="speed-select" data-zone="${z.id}">
-        <div class="t">ZONE #${z.rank}</div><div class="n">≈ ${z.advisoryKmh} km/h advisory ceiling</div><div class="t">${z.nFcw} FCW alerts</div>
+        <div class="t">ZONE #${z.rank}${byDist ? ' · ' + fmtDist(z._d) + ' away' : ''}</div><div class="n">≈ ${z.advisoryKmh} km/h advisory ceiling</div><div class="t">${z.nFcw} FCW alerts</div>
         <div class="d">Typical following distance here ${z.medianDistM} m → ${z.advisoryKmh} km/h keeps ≥${SPEED_ADVISOR.meta.global.targetTtcS}s time-to-collision.<br>Observed speed: median ${z.obsMedianKmh} km/h, up to ${z.obsMaxKmh} km/h · ${z.nCritical} critical alerts<br>${critLine}<br>${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}</div>
       </button>`;
     }).join('');
@@ -2053,6 +2103,112 @@ const SpeedAdvisor = {
   }
 };
 const TRAFFIC_CUBE = {"meta":{"source":"Real ADAS field-test unit log (Jaipur, Sep 2026) \u2014 trip_2026-09-10.xlsx, \"ADAS + GPS Log\" sheet (the largest sheet: 130,175 rows).","rowsTotal":130175,"rowsNoFix":100449,"rowsUsed":29704,"alertsUsed":5186,"tSpan":["2026-09-10 19:56:03","2026-09-18 15:36:49"],"method":"Rows without a GPS fix (missing or zero lat/lon, or no GPS timestamp) are skipped entirely \u2014 100,449 of 130,175 rows (77%). Traffic density is the log\u2019s \"Objects in Frame\" count, banded at the quartiles of GPS-fixed rows. Exposure is counted in GPS-fixed log rows (~1 per second), so every figure is a RATE per minute of riding, not a raw count \u2014 that is what makes traffic bands comparable despite very different amounts of time spent in each.","bands":["0-1","2-4","5-11","12-19","20+"],"bandNames":["Clear","Light","Moderate","Heavy","Dense"],"types":["fcw","ped","lbs","rbs","lbs+rbs"],"crit":["t0","t1","t2","t3"],"hours":[0,13,14,15,16,17,18,19,20,21,22,23]},"exp":{"0,0":[2004,31752.8,2004],"0,13":[340,1202.2,340],"0,14":[311,2445.3,311],"0,15":[114,2807.6,114],"0,16":[170,400.1,170],"0,17":[282,627.6,282],"0,18":[131,2428.1,131],"0,19":[1103,20095.3,1103],"0,20":[2194,23085.5,2194],"0,21":[2479,32824.5,2479],"0,22":[1161,21475.8,1161],"0,23":[461,9673.9,461],"1,0":[448,10309.2,448],"1,13":[488,1474.5,488],"1,14":[576,4240.1,576],"1,15":[250,1526.6,250],"1,16":[21,129.0,21],"1,17":[250,2092.3,250],"1,18":[184,2660.8,184],"1,19":[605,11673.6,605],"1,20":[1499,14740.1,1499],"1,21":[1305,22345.2,1305],"1,22":[513,9850.9,513],"1,23":[133,2376.2,133],"2,0":[91,2413.9,91],"2,13":[715,11306.1,715],"2,14":[1819,35264.3,1819],"2,15":[402,7415.6,402],"2,16":[10,168.2,10],"2,17":[344,5889.2,344],"2,18":[205,2177.4,205],"2,19":[232,5242.1,232],"2,20":[290,4403.2,290],"2,21":[458,10495.2,458],"2,22":[168,4104.8,168],"2,23":[31,1149.0,31],"3,13":[703,13049.6,703],"3,14":[2813,59391.2,2813],"3,15":[559,14240.2,559],"3,17":[361,4387.3,361],"3,18":[57,587.7,57],"3,19":[6,137.4,6],"3,20":[2,61.5,2],"3,21":[14,395.8,14],"3,22":[8,212.7,8],"4,13":[666,15190.3,666],"4,14":[2006,48238.0,2006],"4,15":[422,10821.1,422],"4,17":[262,4900.2,262],"4,18":[38,633.1,38]},"alerts":{"0,0,0":[0,0,2,2],"0,0,2":[0,0,1,0],"0,0,1":[0,0,1,0],"0,0,3":[0,0,2,0],"0,13,0":[0,0,0,2],"0,13,2":[0,0,0,2],"0,14,0":[1,0,2,1],"0,14,3":[0,4,1,0],"0,15,2":[0,0,2,0],"0,15,4":[0,0,0,1],"0,15,3":[0,0,0,1],"0,16,1":[0,0,3,0],"0,17,0":[0,0,1,0],"0,17,1":[0,0,1,0],"0,18,0":[0,0,0,1],"0,19,0":[0,0,5,5],"0,19,2":[0,0,0,3],"0,19,1":[0,0,1,0],"0,19,3":[0,0,2,1],"0,20,0":[0,0,1,7],"0,20,1":[0,0,1,0],"0,20,3":[0,0,21,4],"0,21,0":[0,0,1,4],"0,21,2":[0,0,4,6],"0,21,1":[0,0,1,0],"0,21,3":[0,2,8,3],"0,22,0":[0,0,0,2],"0,22,2":[0,1,1,2],"0,22,3":[0,0,0,1],"0,23,0":[0,0,1,2],"1,0,0":[0,0,30,9],"1,0,2":[0,0,1,1],"1,0,1":[0,0,1,0],"1,0,3":[0,0,1,1],"1,13,0":[0,0,3,4],"1,13,2":[0,0,1,2],"1,13,3":[0,1,12,9],"1,14,0":[0,0,5,6],"1,14,2":[0,2,2,38],"1,14,4":[0,1,0,0],"1,14,1":[0,0,2,0],"1,14,3":[0,4,1,12],"1,15,0":[0,0,1,3],"1,15,2":[0,3,23,3],"1,15,1":[0,0,4,0],"1,15,3":[0,1,1,13],"1,16,0":[0,0,0,1],"1,17,0":[0,0,7,0],"1,17,1":[0,0,2,0],"1,17,3":[0,0,0,1],"1,18,0":[0,0,5,5],"1,18,2":[0,1,1,2],"1,18,1":[0,0,1,0],"1,18,3":[0,1,2,5],"1,19,0":[0,0,15,14],"1,19,2":[0,0,2,8],"1,19,1":[0,0,2,0],"1,19,3":[0,0,1,3],"1,20,0":[0,0,6,66],"1,20,2":[0,0,3,2],"1,20,1":[0,0,7,0],"1,20,3":[0,2,1,7],"1,21,0":[2,0,22,15],"1,21,2":[0,1,6,6],"1,21,1":[0,0,5,0],"1,21,3":[0,6,18,4],"1,22,0":[0,0,26,15],"1,22,2":[0,3,1,2],"1,22,3":[0,3,3,4],"1,23,0":[0,0,2,0],"1,23,2":[0,0,1,1],"1,23,1":[0,0,1,0],"2,0,0":[0,0,8,7],"2,0,2":[0,0,2,0],"2,0,3":[0,0,1,0],"2,13,0":[0,0,40,37],"2,13,2":[0,1,10,7],"2,13,4":[0,0,0,3],"2,13,1":[0,0,1,0],"2,13,3":[0,15,22,58],"2,14,0":[4,0,119,109],"2,14,2":[0,10,21,56],"2,14,4":[0,0,0,5],"2,14,1":[0,0,30,0],"2,14,3":[0,20,26,79],"2,15,0":[0,0,20,19],"2,15,2":[0,1,18,8],"2,15,1":[0,0,8,0],"2,15,3":[0,4,5,17],"2,17,0":[0,0,25,27],"2,17,1":[0,0,24,0],"2,17,3":[0,1,13,9],"2,18,0":[0,0,6,6],"2,18,2":[0,2,2,3],"2,18,4":[0,0,0,4],"2,18,1":[0,0,2,0],"2,18,3":[0,2,1,6],"2,19,0":[0,0,17,14],"2,19,2":[0,0,2,4],"2,19,4":[0,0,0,1],"2,19,1":[0,0,1,0],"2,19,3":[0,0,0,2],"2,20,0":[0,0,11,3],"2,20,2":[0,0,1,1],"2,20,1":[0,0,7,0],"2,20,3":[0,0,2,1],"2,21,0":[0,0,36,17],"2,21,2":[0,0,4,5],"2,21,1":[0,0,2,0],"2,21,3":[0,2,3,2],"2,22,0":[0,0,9,8],"2,22,2":[0,0,2,3],"2,22,1":[0,0,1,0],"2,22,3":[0,6,3,5],"2,23,0":[0,0,5,2],"3,13,0":[5,0,98,75],"3,13,2":[1,7,10,23],"3,13,4":[0,0,0,1],"3,13,1":[0,0,9,0],"3,13,3":[0,12,14,19],"3,14,0":[7,0,304,284],"3,14,2":[0,21,24,67],"3,14,4":[0,1,0,9],"3,14,1":[0,0,32,0],"3,14,3":[0,68,71,142],"3,15,0":[1,0,77,63],"3,15,2":[0,0,4,10],"3,15,4":[0,0,0,1],"3,15,1":[0,0,3,0],"3,15,3":[0,8,23,28],"3,17,0":[0,0,43,34],"3,17,2":[0,2,1,2],"3,17,1":[0,0,20,0],"3,17,3":[0,3,27,10],"3,18,0":[0,0,2,7],"3,18,2":[0,0,4,5],"3,18,3":[0,0,3,1],"3,19,0":[0,0,1,1],"3,21,0":[0,0,2,3],"3,21,2":[0,0,1,0],"3,21,3":[0,0,0,1],"3,22,0":[0,0,1,0],"3,22,2":[0,0,0,1],"4,13,0":[1,0,136,99],"4,13,2":[0,5,6,12],"4,13,4":[0,0,0,3],"4,13,1":[0,0,8,0],"4,13,3":[0,20,19,34],"4,14,0":[12,0,414,345],"4,14,2":[0,20,28,50],"4,14,4":[0,0,1,6],"4,14,1":[0,0,13,0],"4,14,3":[1,26,34,77],"4,15,0":[4,0,88,65],"4,15,2":[0,5,13,8],"4,15,4":[0,0,0,4],"4,15,1":[0,0,3,0],"4,15,3":[1,8,20,29],"4,17,0":[0,0,44,31],"4,17,2":[0,1,1,5],"4,17,4":[0,0,0,1],"4,17,1":[0,0,2,0],"4,17,3":[0,6,4,5],"4,18,0":[0,0,7,4],"4,18,2":[0,0,2,3],"4,18,1":[0,0,1,0],"4,18,3":[0,0,2,4]}};
+
+const ZONE_LIVE = {"47":{"sec":1755,"obj":11.3,"kmh":8.9,"apm":15.8,"t3":205,"types":[234,41,38,140,9],"wh":14,"whr":20.0,"adv":16.3},"8":{"sec":671,"obj":10.3,"kmh":8.8,"apm":19.9,"t3":95,"types":[82,14,70,53,4],"wh":15,"whr":22.3,"adv":18.3},"2":{"sec":861,"obj":14.2,"kmh":11.8,"apm":16.9,"t3":107,"types":[137,1,20,84,1],"wh":14,"whr":20.7,"adv":18.2},"18":{"sec":684,"obj":10.3,"kmh":12.2,"apm":18.6,"t3":76,"types":[93,46,7,65,1],"wh":17,"whr":26.4,"adv":12.5},"55":{"sec":458,"obj":9.5,"kmh":7.6,"apm":19.8,"t3":100,"types":[73,2,50,25,1],"wh":14,"whr":19.8,"adv":18.5},"21":{"sec":1525,"obj":3.1,"kmh":6.5,"apm":5.2,"t3":98,"types":[97,4,27,4,0],"wh":14,"whr":17.7,"adv":8.0},"44":{"sec":304,"obj":14.1,"kmh":14.0,"apm":25.7,"t3":57,"types":[74,5,29,22,0],"wh":13,"whr":25.7,"adv":15.9},"3":{"sec":320,"obj":15.9,"kmh":13.5,"apm":23.4,"t3":53,"types":[83,0,17,25,0],"wh":14,"whr":23.6,"adv":20.2},"6":{"sec":235,"obj":20.0,"kmh":16.3,"apm":30.1,"t3":59,"types":[82,2,18,14,2],"wh":13,"whr":33.4,"adv":14.2},"46":{"sec":292,"obj":19.2,"kmh":17.6,"apm":24.7,"t3":50,"types":[60,6,19,34,1],"wh":13,"whr":26.2,"adv":16.7},"4":{"sec":412,"obj":7.0,"kmh":7.0,"apm":16.0,"t3":59,"types":[39,1,3,67,0],"wh":13,"whr":16.0,"adv":22.7},"12":{"sec":253,"obj":12.5,"kmh":24.0,"apm":24.0,"t3":47,"types":[70,1,8,22,0],"wh":14,"whr":36.5,"adv":22.0},"40":{"sec":213,"obj":15.7,"kmh":10.9,"apm":26.8,"t3":48,"types":[33,14,24,22,2],"wh":14,"whr":26.8,"adv":12.1},"14":{"sec":164,"obj":15.9,"kmh":15.9,"apm":29.3,"t3":42,"types":[54,4,5,16,1],"wh":14,"whr":29.4,"adv":17.1},"29":{"sec":171,"obj":14.7,"kmh":18.9,"apm":24.6,"t3":30,"types":[60,1,4,5,0],"wh":13,"whr":19.7,"adv":18.0},"38":{"sec":158,"obj":16.2,"kmh":15.9,"apm":25.1,"t3":32,"types":[40,4,15,7,0],"wh":14,"whr":25.1,"adv":13.2},"35":{"sec":116,"obj":18.9,"kmh":24.1,"apm":33.1,"t3":31,"types":[57,1,4,1,1],"wh":14,"whr":33.1,"adv":17.2},"65":{"sec":74,"obj":22.6,"kmh":20.9,"apm":43.8,"t3":22,"types":[41,2,5,6,0],"wh":15,"whr":43.8,"adv":17.3},"45":{"sec":83,"obj":24.0,"kmh":29.3,"apm":36.1,"t3":25,"types":[35,0,1,14,0],"wh":13,"whr":36.1,"adv":21.1},"1":{"sec":371,"obj":2.4,"kmh":35.1,"apm":8.9,"t3":16,"types":[48,0,7,0,0],"wh":22,"whr":9.5,"adv":21.0},"20":{"sec":207,"obj":6.9,"kmh":10.1,"apm":10.4,"t3":30,"types":[13,0,11,12,0],"wh":14,"whr":12.3,"adv":8.0},"10":{"sec":146,"obj":11.3,"kmh":20.2,"apm":18.1,"t3":19,"types":[31,0,7,6,0],"wh":15,"whr":34.9,"adv":19.9},"15":{"sec":236,"obj":4.6,"kmh":15.5,"apm":9.7,"t3":21,"types":[32,4,1,1,0],"wh":17,"whr":16.8,"adv":16.5},"23":{"sec":161,"obj":8.4,"kmh":16.1,"apm":13.8,"t3":23,"types":[18,1,10,7,1],"wh":14,"whr":30.5,"adv":14.9},"5":{"sec":59,"obj":24.9,"kmh":30.5,"apm":40.7,"t3":19,"types":[28,0,3,8,1],"adv":24.0},"33":{"sec":76,"obj":14.5,"kmh":16.4,"apm":30.8,"t3":20,"types":[13,3,13,9,1],"wh":14,"whr":30.8,"adv":16.3},"39":{"sec":71,"obj":17.8,"kmh":18.6,"apm":30.4,"t3":21,"types":[32,1,2,1,0],"wh":14,"whr":30.4,"adv":13.9},"48":{"sec":67,"obj":19.1,"kmh":23.4,"apm":34.9,"t3":18,"types":[26,4,1,7,1],"wh":14,"whr":34.9,"adv":20.1},"50":{"sec":54,"obj":21.4,"kmh":24.7,"apm":41.1,"t3":21,"types":[24,0,5,6,2],"adv":17.4},"28":{"sec":100,"obj":19.8,"kmh":12.7,"apm":21.0,"t3":14,"types":[23,0,1,11,0],"wh":13,"whr":21.0,"adv":22.2},"61":{"sec":129,"obj":6.4,"kmh":7.4,"apm":13.5,"t3":19,"types":[16,0,2,11,0],"wh":15,"whr":13.5,"adv":27.8},"30":{"sec":368,"obj":3.5,"kmh":3.4,"apm":5.7,"t3":14,"types":[19,0,0,16,0],"wh":14,"whr":5.7,"adv":29.2},"62":{"sec":54,"obj":19.5,"kmh":21.4,"apm":31.1,"t3":14,"types":[19,0,3,5,1],"adv":31.0},"57":{"sec":41,"obj":17.3,"kmh":29.0,"apm":41.0,"t3":14,"types":[25,0,0,3,0],"adv":20.5},"49":{"sec":59,"obj":20.1,"kmh":24.9,"apm":29.5,"t3":14,"types":[19,0,0,10,0],"adv":18.4},"11":{"sec":121,"obj":8.3,"kmh":21.1,"apm":13.4,"t3":16,"types":[20,0,2,4,1],"adv":20.0},"17":{"sec":82,"obj":23.9,"kmh":19.9,"apm":21.2,"t3":12,"types":[26,0,2,1,0],"wh":17,"whr":21.2,"adv":22.9},"53":{"sec":52,"obj":14.7,"kmh":29.2,"apm":30.0,"t3":13,"types":[22,1,2,1,0],"adv":18.7},"56":{"sec":31,"obj":14.2,"kmh":20.3,"apm":42.6,"t3":14,"types":[13,0,7,1,1],"adv":12.1},"60":{"sec":37,"obj":23.1,"kmh":26.6,"apm":43.8,"t3":14,"types":[6,2,0,18,1]},"41":{"sec":63,"obj":14.0,"kmh":6.3,"apm":22.9,"t3":12,"types":[4,1,12,5,2],"wh":18,"whr":22.9},"64":{"sec":35,"obj":15.3,"kmh":27.4,"apm":44.6,"t3":8,"types":[20,0,2,4,0],"adv":24.1},"37":{"sec":38,"obj":12.2,"kmh":24.6,"apm":34.7,"t3":14,"types":[14,0,0,8,0],"adv":13.2},"67":{"sec":86,"obj":5.8,"kmh":21.3,"apm":15.3,"t3":13,"types":[19,0,2,1,0],"adv":17.3},"52":{"sec":45,"obj":10.4,"kmh":28.6,"apm":30.7,"t3":11,"types":[15,4,4,0,0],"adv":29.4},"54":{"sec":39,"obj":14.0,"kmh":28.3,"apm":29.2,"t3":13,"types":[11,0,4,4,0],"adv":26.2},"32":{"sec":35,"obj":17.1,"kmh":38.6,"apm":37.7,"t3":10,"types":[9,0,3,10,0],"adv":17.9},"59":{"sec":38,"obj":19.7,"kmh":18.0,"apm":30.0,"t3":13,"types":[8,1,6,4,0],"adv":15.9},"22":{"sec":130,"obj":0.9,"kmh":1.2,"apm":12.0,"t3":3,"types":[0,0,0,26,0],"wh":20,"whr":12.0},"31":{"sec":45,"obj":18.7,"kmh":25.3,"apm":25.3,"t3":11,"types":[10,0,1,6,2],"adv":16.4},"34":{"sec":35,"obj":25.8,"kmh":35.9,"apm":36.0,"t3":9,"types":[20,0,1,0,0],"adv":24.9},"51":{"sec":31,"obj":21.0,"kmh":34.9,"apm":36.8,"t3":11,"types":[8,0,4,7,0]},"19":{"sec":133,"obj":5.2,"kmh":16.1,"apm":7.7,"t3":6,"types":[12,4,1,0,0],"adv":12.0},"0":{"sec":51,"obj":1.8,"kmh":0.6,"apm":27.1,"t3":0,"types":[0,0,0,23,0]},"25":{"sec":122,"obj":3.8,"kmh":26.9,"apm":8.4,"t3":5,"types":[11,0,6,0,0],"adv":18.2},"63":{"sec":41,"obj":15.3,"kmh":17.3,"apm":19.0,"t3":5,"types":[10,0,1,2,0],"adv":29.3},"13":{"sec":56,"obj":7.6,"kmh":21.9,"apm":13.9,"t3":3,"types":[5,0,2,6,0]},"9":{"sec":49,"obj":7.6,"kmh":26.2,"apm":12.2,"t3":3,"types":[6,0,3,1,0]},"24":{"sec":835,"obj":0.8,"kmh":1.3,"apm":0.8,"t3":4,"types":[0,0,3,8,0],"wh":21,"whr":0.8},"43":{"sec":95,"obj":2.8,"kmh":23.4,"apm":6.9,"t3":3,"types":[10,0,1,0,0],"wh":0,"whr":7.0,"adv":19.5}};
+
+/* ---------- Local: where you are, against the field data ----------
+ * Two separate behaviours, deliberately tuned differently:
+ *
+ *  DISPLAY (the Home card, the live HUD line) updates immediately on every fix. It is
+ *  passive text, so flicker costs nothing and freshness is worth more.
+ *
+ *  ALERT (banner + voice) is heavily gated. Measured on the real track, a naive
+ *  "inside/outside" test fires 5,514 times in 495 minutes -- once every 5 seconds --
+ *  because GPS jitter flips the boundary constantly. Requiring DWELL seconds of
+ *  continuous presence, only releasing the zone past radius x EXIT_MUL, and refusing to
+ *  re-announce the same zone within COOLDOWN brings that to 12 alerts in 495 minutes
+ *  (one per ~41 min) on the same track. Those three constants are why this is usable. */
+const Z_DWELL = 6, Z_EXIT_MUL = 1.2, Z_COOLDOWN = 120000, Z_MIN_LEVEL = 3;
+const ZTYPE = { fcw: 'front-collision', ped: 'pedestrian', lbs: 'left blind-spot', rbs: 'right blind-spot', 'lbs+rbs': 'blind-spot' };
+const Local = {
+  zone: null, dist: null, near: null, nearDist: null,   // zone = the one you are INSIDE
+  _run: 0, _runId: null, _held: null, _last: {},
+  on(k) { const v = Settings.v; return v.zoneAware !== false && v[k] !== false; },
+  zoneById(id) { return DANGER_ZONES.zones.find(z => z.id === id) || null; },
+  live(id) { return ZONE_LIVE[id] || null; },
+  /* Nearest zone whose circle contains the point, preferring the tightest fit so a small
+   * precise zone wins over the 775 m one that covers half the city. */
+  resolve(c) {
+    if (!c) return null;
+    let best = null, bestFrac = 2, nr = null, nd = Infinity;
+    for (const z of DANGER_ZONES.zones) {
+      const d = haversine({ latitude: c.latitude, longitude: c.longitude }, { latitude: z.lat, longitude: z.lon });
+      if (d < nd) { nd = d; nr = z; }
+      const frac = d / z.radiusM;
+      if (frac <= 1 && frac < bestFrac) { bestFrac = frac; best = { z, d }; }
+    }
+    this.near = nr; this.nearDist = nd;
+    return best;
+  },
+  update(c) {
+    if (!this.on('zoneAware')) { this.zone = null; return; }
+    const hit = this.resolve(c);
+    this.zone = hit ? hit.z : null; this.dist = hit ? hit.d : null;
+    if (!hit) { this._run = 0; this._runId = null; }
+    else {
+      this._run = hit.z.id === this._runId ? this._run + 1 : 1; this._runId = hit.z.id;
+      // release the held zone only once clearly outside it
+      if (this._held != null && this._held !== hit.z.id) {
+        const hz = this.zoneById(this._held);
+        if (hz && haversine({ latitude: c.latitude, longitude: c.longitude }, { latitude: hz.lat, longitude: hz.lon }) > hz.radiusM * Z_EXIT_MUL) this._held = null;
+      }
+      const now = Date.now();
+      if (this.on('zoneAlert') && Safety.active && hit.z.level >= Z_MIN_LEVEL && this._held !== hit.z.id
+          && this._run >= Z_DWELL && now - (this._last[hit.z.id] || 0) >= Z_COOLDOWN) {
+        this._held = hit.z.id; this._last[hit.z.id] = now;
+        Engine.alerts.raise('zone_entry', { detail: this.detail(hit.z), demo: Engine.source === 'demo' });
+        if (Settings.v.audio !== false) Voice.say(this.say(hit.z), 2);
+      }
+    }
+  },
+  detail(z) {
+    const e = this.live(z.id) || {};
+    return { zone: z.rank, level: z.level, domType: z.domType, advisoryKmh: e.adv != null ? e.adv : null,
+      avgObjects: e.obj != null ? e.obj : null, alertsPerMin: e.apm != null ? e.apm : null, radiusM: z.radiusM };
+  },
+  /* One short spoken/!banner sentence -- the rider is moving, so it has to be sayable. */
+  say(z) {
+    const e = this.live(z.id) || {}, bits = ['Entering a recorded ' + (z.level === 4 ? 'high' : 'elevated') + ' risk area'];
+    if (z.domType && ZTYPE[z.domType]) bits.push('mostly ' + ZTYPE[z.domType] + ' alerts');
+    if (this.on('zoneSpeed') && e.adv != null) bits.push('suggested speed ' + Math.round(e.adv) + ' kilometres per hour');
+    return bits.join('. ') + '.';
+  },
+  /* The card the rider reads: what this place is, from their own logged data. */
+  card() {
+    if (!this.on('zoneAware') || !this.on('zoneCard')) return '';
+    const g = Sensors.gps;
+    if (!g.coords || g.state === 'blocked') return '';
+    const z = this.zone;
+    if (!z) {
+      if (!this.near) return '';
+      return `<div class="zonecard out"><div class="zt">Not in a recorded risk area</div>
+        <div class="zs">Nearest is zone #${this.near.rank}, about ${fmtDist(this.nearDist)} away.</div></div>`;
+    }
+    const e = this.live(z.id) || {}, L = { 2: 'MODERATE', 3: 'HIGH', 4: 'SEVERE' }[z.level] || '';
+    const rows = [];
+    if (this.on('zoneSpeed') && e.adv != null) rows.push(['Suggested speed here', '≈ ' + Math.round(e.adv) + ' km/h', 'from the typical following distance logged in this zone']);
+    if (this.on('zoneTraffic') && e.obj != null) rows.push(['Typical traffic here', e.obj + ' objects', e.obj >= 12 ? 'dense — the band with the highest alert rate' : e.obj >= 5 ? 'moderate' : 'usually light']);
+    if (e.apm != null) rows.push(['Alert rate recorded here', e.apm + ' / min', z.n + ' alerts logged here, ' + z.nCritical + ' critical']);
+    if (z.domType) rows.push(['Most common risk here', ZTYPE[z.domType] ? ZTYPE[z.domType].replace(/^./, function (m) { return m.toUpperCase(); }) : z.domType, (FIELD_ALERTS[z.domType] ? FIELD_ALERTS[z.domType].label : '')]);
+    if (e.wh != null) rows.push(['Worst time of day here', pad2(e.wh) + ':00', e.whr + ' alerts/min in that hour']);
+    return `<div class="zonecard lvl${z.level}">
+      <div class="zt">YOU ARE IN ZONE #${z.rank} · ${L}</div>
+      <div class="zs">${fmtDist(this.dist)} from its centre · ${z.radiusM} m radius</div>
+      ${rows.map(r => `<div class="zr"><div class="zk">${esc(r[0])}</div><div class="zv">${esc(r[1])}</div>${r[2] ? `<div class="zn">${esc(r[2])}</div>` : ''}</div>`).join('')}
+      <div class="zf">From your own field log, not live traffic. Alert rate is not crash rate.</div></div>`;
+  },
+  /* Compact one-liner for the live HUD. */
+  line() {
+    if (!this.on('zoneAware') || !this.on('zoneCard')) return '';
+    const z = this.zone; if (!z) return this.near && this.nearDist < 2000 ? 'Zone #' + this.near.rank + ' ' + fmtDist(this.nearDist) + ' away' : 'No recorded risk area here';
+    const e = this.live(z.id) || {};
+    let s = 'ZONE #' + z.rank + ' · ' + ({ 2: 'moderate', 3: 'high', 4: 'severe' }[z.level] || '');
+    if (this.on('zoneSpeed') && e.adv != null) s += ' · suggest ' + Math.round(e.adv) + ' km/h';
+    return s;
+  }
+};
+const pad2 = n => (n < 10 ? '0' : '') + n;
+const fmtDist = m => m == null ? '—' : m < 950 ? Math.round(m / 10) * 10 + ' m' : (m / 1000).toFixed(1) + ' km';
 
 /* ---------- Traffic x Time x Danger ----------
  * Built from the largest sheet of the field log, with every GPS-unfixed row dropped.
@@ -2071,6 +2227,14 @@ const TYPECOL = ['#3987e5', '#d95926', '#199e70', '#c98500', '#8B8B8B']; // cate
 const TYPENAME = { fcw: 'Front collision', ped: 'Pedestrian', lbs: 'Left blind spot', rbs: 'Right blind spot', 'lbs+rbs': 'Both blind spots' };
 const MINEXP = 90;   // seconds of exposure below which a cell is too thin to quote
 
+/* Closest-first when we have a fix, otherwise keep the risk ranking. Returns [list, byDist]
+ * so callers can show a distance column only when it means something. */
+function orderByDistance(zones) {
+  const g = Sensors.gps, c = g && g.coords;
+  if (!c || !Settings.v.zoneNearSort || Settings.v.zoneAware === false) return [zones, false];
+  const P = { latitude: c.latitude, longitude: c.longitude };
+  return [zones.map(z => Object.assign({}, z, { _d: haversine(P, { latitude: z.lat, longitude: z.lon }) })).sort((a, b) => a._d - b._d), true];
+}
 const Traffic = {
   tr: null, tb: null, ty: null, crit: false,     // null = "All" on that axis
   M() { return TRAFFIC_CUBE.meta; },
@@ -2234,7 +2398,7 @@ document.addEventListener('click', async e => {
     case 'setup-next': setupNext(); break;
     case 'setup-sensors': if (Setup.busy) break; Setup.busy = true; renderSetup(); await Sensors.requestMotion(); await Promise.all([Sensors.probeGps(), Sensors.probeMotion(2400)]); Setup.busy = false; Setup.res.sensors = { ok: Sensors.accel.state === 'ready', text: Sensors.accel.state === 'ready' ? 'Motion sensors responding.' : 'Motion sensors are not responding. Braking detection will be unavailable.' }; renderSetup(); break;
     case 'setup-cam': if (Setup.busy) break; Setup.busy = true; renderSetup(); { const ok = await Sensors.startCamera(); Setup.busy = false; Setup.res.cameracheck = { ok, text: ok ? 'Live frames received (' + Sensors.camera.note + ').' : Sensors.camera.note }; renderSetup(); } break;
-    case 'setup-voice': Voice.unlock(); Sensors.probeAudio(); Voice.say('Purnansh ADAS voice alert test.', 2, true); Setup.res.audio = { ok: Voice.supported || !!Voice.ctx, text: Voice.supported ? 'Voice test sent. If you heard it, audio works.' : 'Speech is unavailable; alerts will use tones and the screen.' }; renderSetup(); break;
+    case 'setup-voice': Voice.unlock(); Sensors.probeAudio(); Voice.say('DrivoMate ADAS voice alert test.', 2, true); Setup.res.audio = { ok: Voice.supported || !!Voice.ctx, text: Voice.supported ? 'Voice test sent. If you heard it, audio works.' : 'Speech is unavailable; alerts will use tones and the screen.' }; renderSetup(); break;
     case 'setup-done': Settings.set('setupDone', true); Sensors.stopCamera(); UI.go('home'); break;
     case 'start': Safety.start(); break;
     case 'openlive': UI.go('live'); break;
@@ -2275,7 +2439,7 @@ document.addEventListener('click', async e => {
     case 'tx-crit': Traffic.crit = !Traffic.crit; Traffic.render(); break;
     case 'tx-cell': { const ct = +d.t, cb = +d.b, same = Traffic.tr === ct && Traffic.tb === cb; Traffic.tr = same ? null : ct; Traffic.tb = same ? null : cb; Traffic.render(); break; }
     case 'devcheck': deviceCheck(); break;
-    case 'testvoice': Voice.unlock(); Voice.say('Purnansh ADAS voice alert test.', 2, true); break;
+    case 'testvoice': Voice.unlock(); Voice.say('DrivoMate ADAS voice alert test.', 2, true); break;
     case 'resetsetup': Settings.set('setupDone', false); Setup.i = 0; Setup.res = {}; $('#s-setup')._k = ''; UI.go('setup'); break;
     case 'deletedata': { const yes = await UI.ask('Delete all local data?', 'This removes every saved safety event and ride from this device. Settings are kept.', 'DELETE', 'CANCEL'); if (yes) { DB.clear('safety_events'); DB.clear('ride_sessions'); Store.del('ride_counter'); Store.del('battery_rate'); UI.toast('Local data deleted.'); renderSettings(); } break; }
   }
@@ -2328,6 +2492,8 @@ window.addEventListener('online', () => UI.render()); window.addEventListener('o
   setInterval(() => { if (UI.cur === 'home' || UI.cur === 'status') UI.render(); }, 700);
 })();
 
+window.addEventListener('resize', () => { if (UI.cur === 'welcome') fitWordmark(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (UI.cur === 'welcome') fitWordmark(); });
 </script>
 </body>
 </html>
