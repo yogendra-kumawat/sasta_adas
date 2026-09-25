@@ -93,7 +93,8 @@ h1,h2,h3,p{margin:0}
 .wm{font-family:var(--disp);font-weight:800;font-size:22px;letter-spacing:.12em}
 .pill{font-family:var(--disp);font-weight:600;font-size:16px;letter-spacing:.1em}
 .hero{padding:26px 20px 22px;margin:14px 0 0;text-align:left}
-.hero .word{font-family:var(--disp);font-weight:800;font-size:clamp(96px,32vw,168px);line-height:.82;letter-spacing:.01em;text-transform:uppercase}
+/* Starting size; fitHero() shrinks it when the status word is too long for the box. */
+.hero .word{font-family:var(--disp);font-weight:800;font-size:clamp(56px,32vw,168px);line-height:.82;letter-spacing:.01em;text-transform:uppercase;white-space:nowrap}
 .hero .cap{margin-top:12px;color:var(--mute);font-size:15px}
 .hero.lv1 .word,.hero.safe .word{color:var(--acc)}.hero.idle .word{color:#4a4a4a}
 .hero.lv2 .word{color:var(--lv2)}.hero.lv3 .word{color:var(--lv3)}.hero.lv4 .word{color:var(--lv4)}
@@ -434,6 +435,7 @@ const ALERTS = {
   sudden_accel:    { level: 2, icon: '⚠️', title: 'SUDDEN ACCELERATION', sub: 'MOTION SENSOR', say: '', label: 'Sudden Acceleration' },
   sudden_turn:     { level: 2, icon: '⚠️', title: 'SUDDEN DIRECTION CHANGE', sub: 'MOTION SENSOR', say: '', label: 'Sudden Direction Change' },
   over_limit:      { level: 2, icon: '⚠️', title: 'SPEED ABOVE LIMIT', sub: 'OPENSTREETMAP LIMIT', say: '', label: 'Speed Above Limit' },
+  zone_intrusion:  { level: 3, icon: '⚠️', title: 'VEHICLE IN YOUR ZONE', sub: 'DANGER ZONE OVERLAY', say: 'Warning. Vehicle in your zone.', label: 'Vehicle In Zone' },
   zone_entry:      { level: 2, icon: '⚠️', title: 'RECORDED RISK AREA', sub: 'FROM YOUR FIELD DATA', say: '', label: 'Entered Risk Area' },
   unusual:         { level: 1, icon: 'ℹ️', title: 'UNUSUAL RIDING EVENT', sub: 'RECORDED FOR REVIEW', say: '', label: 'Unusual Riding Event' },
   vehicle_info:    { level: 1, icon: 'ℹ️', title: 'VEHICLE DETECTED', sub: '', say: '', label: 'Vehicle Detected', store: false },
@@ -886,7 +888,7 @@ const DEFAULTS = {
   demoMode: false, storeEvents: true, storeStats: true, retention: 30, upload: false, setupDone: false,
   storeTrack: true, roadLookup: true, mapFollow: true, mapEvents: true, tileUrl: '',
   zoneVisible: true, zonePts: null,
-  zoneAware: true, zoneCard: true, zoneAlert: true, zoneSpeed: true, zoneTraffic: true, zoneNearSort: true
+  zoneRoi: true, zoneAware: true, zoneCard: true, zoneAlert: true, zoneSpeed: true, zoneTraffic: true, zoneNearSort: true
 };
 
 /* ---------- base map tiles ----------
@@ -1300,6 +1302,25 @@ const Engine = {
     return 1000 / f;
   },
   step(ts) { if (this.busy || ts - this.last < this.interval()) return; this.last = ts; this.tick(ts); },
+  /* Vehicle-in-zone check. Runs in the engine loop, NOT in the draw call, so it behaves the
+   * same whether or not the overlay is being drawn and whether or not the live view is on
+   * screen. Each track announces at most once per entry and re-arms only after it leaves. */
+  zoneCheck(tracks, ts, demo) {
+    const armed = Zone.armed();
+    if (!armed) { for (const tr of tracks) { tr.zoneIn = false; tr.zoneAnn = false; } return; }
+    const m = stageMap(); if (!m) return;
+    const pts = Zone.pts();
+    for (const tr of tracks) {
+      if (!VEHICLE.has(tr.label)) { tr.zoneIn = false; continue; }
+      const c = zoneCentroid(tr, m);
+      const was = !!tr.zoneIn;
+      tr.zoneIn = Zone.inside(pts, c[0], c[1]);
+      if (tr.zoneIn && !was && !tr.zoneAnn && tr.hits >= 3) {
+        tr.zoneAnn = true;
+        this.alerts.raise('zone_intrusion', { detail: { label: tr.label, distEst: tr.dS != null ? tr.dS : null }, demo, now: ts });
+      } else if (!tr.zoneIn && was) tr.zoneAnn = false;
+    }
+  },
   async tick(ts) {
     const t = ts / 1000, demo = this.source === 'demo', st = $('#stage'); if (!st) return;
     const cw = st.clientWidth, ch = st.clientHeight, vis = cw > 0 && ch > 0;
@@ -1323,6 +1344,7 @@ const Engine = {
     }
     const tracks = this.tracker.update(dets, t), res = this.risk.evaluate(tracks, ctx, t);
     for (const e of res.events) this.alerts.raise(e.type, { detail: e.detail, demo, now: ts });
+    this.zoneCheck(tracks, ts, demo);
     this.ovTracks = tracks.filter(tr => tr.hits >= 3); this.res = res; this.flags = res.flags; this.ctx = ctx;
     if (vis) UI.renderStage(ts);
   }
@@ -1388,7 +1410,11 @@ const Zone = {
   pts() { const p = Settings.v.zonePts; return Array.isArray(p) && p.length >= 3 ? p : Zone.DEFAULT(); },
   setPts(p) { Settings.set('zonePts', p); },
   reset() { Settings.set('zonePts', null); },
+  // visible() controls ONLY whether the outline is drawn. It must not gate the hit-test:
+  // the overlay is a visual reference, and hiding it to see the road better should not
+  // silently switch off the red-box highlight and the intrusion alert that depend on it.
   visible() { return Settings.v.zoneVisible !== false; },
+  armed() { return Settings.v.zoneRoi !== false; },
   editing: false, drag: -1,
   hit(pts, x, y, w, h, r = 24) {   // vertex index under stage-pixel (x,y), or -1
     for (let i = 0; i < pts.length; i++) { const px = pts[i][0] * w, py = pts[i][1] * h; if ((px - x) * (px - x) + (py - y) * (py - y) <= r * r) return i; }
@@ -1449,16 +1475,27 @@ function drawObj(g, label, x, y, w, h) {
   else if (label === 'person') { C(.5, .08, w * .28, '#8a7a6a'); R(.2, .17, .6, .4, '#3d4f5c'); R(.22, .57, .24, .43, '#23272b'); R(.54, .57, .24, .43, '#23272b'); }
   else { R(0, .2, 1, .5, '#4a3d33'); R(.08, .7, .12, .3, '#3a2f27'); R(.8, .7, .12, .3, '#3a2f27'); R(.78, 0, .2, .3, '#5a4a3d'); }
 }
+/* Maps a track's video-frame box to stage-normalised coords. drawBoxes() paints with this
+ * and the engine hit-tests with it, so the red box and the alert can never disagree. */
+function stageMap() {
+  const st = $('#stage'); if (!st) return null;
+  const w = st.clientWidth, h = st.clientHeight; if (!(w > 0 && h > 0)) return null;
+  const demo = Engine.source === 'demo', v = $('#vid');
+  let ox = 0, oy = 0, sw = w, sh = h;
+  if (!demo && v && v.videoWidth) { const sc = Math.max(w / v.videoWidth, h / v.videoHeight); sw = v.videoWidth * sc; sh = v.videoHeight * sc; ox = (w - sw) / 2; oy = (h - sh) / 2; }
+  return { w, h, ox, oy, sw, sh };
+}
+function zoneCentroid(tr, m) { return [(m.ox + (tr.box.x + tr.box.w / 2) * m.sw) / m.w, (m.oy + (tr.box.y + tr.box.h / 2) * m.sh) / m.h]; }
 function drawBoxes(f) {
   const { g, w, h } = f, st = $('#stage'), demo = Engine.source === 'demo', v = $('#vid');
   let ox = 0, oy = 0, sw = w, sh = h;
   if (!demo && v.videoWidth) { const sc = Math.max(w / v.videoWidth, h / v.videoHeight); sw = v.videoWidth * sc; sh = v.videoHeight * sc; ox = (w - sw) / 2; oy = (h - sh) / 2; }
   g.clearRect(0, 0, w, h); g.textBaseline = 'top'; g.font = '700 14px "Barlow Condensed","Arial Narrow",sans-serif';
-  const zonePts = Zone.visible() ? Zone.pts() : null;
+  const drawZoneCol = Zone.armed();
   for (const tr of Engine.ovTracks) {
     const b = tr.box, x = ox + b.x * sw, y = oy + b.y * sh, bw = b.w * sw, bh = b.h * sh, flag = Engine.flags && Engine.flags[tr.id], lv = flag ? ALERTS[flag].level : 1;
-    let col = LVCOL[lv], inZone = false;
-    if (zonePts && VEHICLE.has(tr.label) && w > 0 && h > 0) { inZone = Zone.inside(zonePts, (x + bw / 2) / w, (y + bh / 2) / h); if (inZone) col = LVCOL[4]; }
+    let col = LVCOL[lv], inZone = drawZoneCol && !!tr.zoneIn;
+    if (inZone) col = LVCOL[4];
     g.strokeStyle = col; g.globalAlpha = .55; g.lineWidth = 1.5; g.strokeRect(x, y, bw, bh); g.globalAlpha = 1; g.lineWidth = 3;
     const L = Math.min(16, bw / 3, bh / 3); g.beginPath();
     [[x, y, 1, 1], [x + bw, y, -1, 1], [x, y + bh, 1, -1], [x + bw, y + bh, -1, -1]].forEach(([cx, cy, sx, sy]) => { g.moveTo(cx, cy + sy * L); g.lineTo(cx, cy); g.lineTo(cx + sx * L, cy); }); g.stroke();
@@ -1515,7 +1552,10 @@ const UI = {
   leaveDemo() { if (!Safety.active) Engine.stop(); },
   liveChips() {
     const demo = Engine.source === 'demo', el = $('#liveChips');
-    const zone = `<button data-act="zone-toggle" class="${Zone.visible() ? 'on' : ''}">${Zone.visible() ? 'Hide zone' : 'Show zone'}</button><button data-act="zone-edit" class="${Zone.editing ? 'on' : ''}">${Zone.editing ? 'Done' : 'Edit zone'}</button>` + (Zone.editing ? `<button data-act="zone-reset">Reset zone</button>` : '');
+    const zOn = Zone.visible(), zArm = Zone.armed();
+    const zone = `<button data-act="zone-toggle" class="${zOn ? 'on' : ''}" title="${zOn ? 'Hide the outline. The zone stays active.' : 'Show the zone outline.'}">${zOn ? 'Hide outline' : 'Show outline'}</button>`
+      + `<button data-act="zone-arm" class="${zArm ? 'on' : ''}" title="${zArm ? 'Zone is active: vehicles inside it turn red and raise an alert.' : 'Zone is off: no red boxes, no alert.'}">${zArm ? 'Zone ON' : 'Zone OFF'}</button>`
+      + `<button data-act="zone-edit" class="${Zone.editing ? 'on' : ''}">${Zone.editing ? 'Done' : 'Edit zone'}</button>` + (Zone.editing ? `<button data-act="zone-reset">Reset zone</button>` : '');
     el.innerHTML = zone + (demo ? [['front_collision', 'Collision'], ['sudden_braking', 'Braking'], ['safe_distance', 'Distance'], ['pedestrian', 'Pedestrian'], ['obstacle', 'Obstacle'], ['hard_braking', 'Hard brake']].map(([k, l]) => `<button data-act="test" data-t="${k}">${l}</button>`).join('') : '');
   },
   toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(this._tt); this._tt = setTimeout(() => t.classList.remove('on'), 3400); },
@@ -1597,16 +1637,20 @@ function visionState() {
  * the name depends on the brand string and on whether the condensed webfont actually
  * loaded -- on a slow or offline first run the fallback is far wider, and a CSS clamp
  * tuned for one of those cases clips in the other. */
-function fitWordmark() {
-  const el = $('#s-welcome .disp'); if (!el) return;
+function fitText(el) {
+  if (!el) return;
   el.style.fontSize = '';
-  let size = parseFloat(getComputedStyle(el).fontSize);
+  let size = parseFloat(window.getComputedStyle(el).fontSize);
   // el.scrollWidth > el.clientWidth is the overflow test on the element itself; comparing
   // against the PARENT's clientWidth silently includes the parent's padding and never trips.
   for (let i = 0; i < 60 && size > 18 && el.scrollWidth > el.clientWidth; i++) {
     size *= 0.94; el.style.fontSize = size.toFixed(1) + 'px';
   }
 }
+function fitWordmark() { fitText($('#s-welcome .disp')); }
+// The status word changes between renders (SAFE / CAUTION / CRITICAL / STANDBY / STARTING)
+// and the longer ones clip at the CSS size, so refit after every home render.
+function fitHero() { fitText($('#s-home .hero .word')); }
 function renderHome() {
   const act = Safety.active, demo = act && Engine.source === 'demo', A = act ? Engine.alerts.current(performance.now()) : null, lv = A ? A.def.level : 0;
   const visOK = demo || Detector.state === 'ready';
@@ -1644,7 +1688,7 @@ function renderHome() {
     </div>
     <div class="sos"><button class="btn dng" data-act="sos">SOS</button></div>
     <p class="legal" style="margin-top:22px">Experimental prototype. Not a certified safety system. <button class="tiny-link" data-act="about">Limitations</button></p>`;
-  const el = $('#s-home'); if (el._h !== html) { el.innerHTML = html; el._h = html; }
+  const el = $('#s-home'); if (el._h !== html) { el.innerHTML = html; el._h = html; fitHero(); }
 }
 
 /* ---------- SETUP ---------- */
@@ -1853,6 +1897,7 @@ function renderSettings() {
     ${tog('zoneSpeed', 'Suggest a speed for the zone', 'Derived from the typical following distance logged in that zone. Not a legal limit.', !v.zoneAware)}
     ${tog('zoneTraffic', 'Show typical traffic for the zone', 'Average objects in frame recorded in that zone.', !v.zoneAware)}
     ${tog('zoneNearSort', 'Sort zone lists by distance', 'Danger Zones and Speed Advisor list the closest first when GPS has a fix.', !v.zoneAware)}
+    ${tog('zoneRoi', 'Camera danger-zone overlay', 'Highlights a vehicle in red and warns you when its centre enters the region you drew on the live view. Hiding the outline in the live view does not switch this off.')}
     ${tog('storeTrack', 'Save ride route', 'Route points and event locations stay on this device.')}
     <div class="set col"><div class="l" style="margin-bottom:8px">Map tile server</div><input type="text" value="${esc(v.tileUrl)}" data-cfgtxt="tileUrl" aria-label="Map tile server URL" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="s" style="margin-top:8px">Leave blank for the built-in Esri dark basemap — no API key, but it stops at zoom 16. Paste a keyed provider here (CARTO, Stadia, MapTiler, Thunderforest) for closer zoom. Two things to avoid: <b>tile.openstreetmap.org</b>, whose volunteer servers answer 403 &ldquo;Access blocked&rdquo; to clients that cannot identify themselves — including a page opened from a file or a sandboxed frame — and a keyed URL with the key left out, which some providers answer with a watermarked tile rather than an error. Whatever you set here sees which areas you view. Map data © OpenStreetMap contributors.</div></div>
     <div class="sec">Power</div>
@@ -2421,6 +2466,7 @@ document.addEventListener('click', async e => {
     case 'map-follow': Settings.set('mapFollow', !Settings.v.mapFollow); MapView.renderChips(); MapView.draw(false); break;
     case 'map-events': Settings.set('mapEvents', !Settings.v.mapEvents); MapView.renderChips(); MapView.draw(false); break;
     case 'zone-toggle': Settings.set('zoneVisible', !Zone.visible()); UI.liveChips(); break;
+    case 'zone-arm': Settings.set('zoneRoi', !Zone.armed()); UI.liveChips(); UI.toast(Zone.armed() ? 'Zone active — vehicles inside it turn red.' : 'Zone off — no red boxes or zone alerts.'); break;
     case 'zone-edit': { Zone.editing = !Zone.editing; const stEl = $('#stage'); if (stEl) stEl.classList.toggle('zone-edit', Zone.editing); UI.liveChips(); if (!Zone.editing) UI.toast('Danger zone saved.'); break; }
     case 'zone-reset': Zone.reset(); UI.toast('Danger zone reset to default.'); break;
     case 'about': UI.go('about'); break;
@@ -2492,8 +2538,8 @@ window.addEventListener('online', () => UI.render()); window.addEventListener('o
   setInterval(() => { if (UI.cur === 'home' || UI.cur === 'status') UI.render(); }, 700);
 })();
 
-window.addEventListener('resize', () => { if (UI.cur === 'welcome') fitWordmark(); });
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (UI.cur === 'welcome') fitWordmark(); });
+window.addEventListener('resize', () => { if (UI.cur === 'welcome') fitWordmark(); else if (UI.cur === 'home') fitHero(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (UI.cur === 'welcome') fitWordmark(); else if (UI.cur === 'home') fitHero(); });
 </script>
 </body>
 </html>
