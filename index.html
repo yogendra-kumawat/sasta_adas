@@ -220,6 +220,31 @@ input[type=range]::-moz-range-thumb{width:18px;height:26px;background:var(--acc)
 .maptools{position:absolute;left:10px;bottom:76px;z-index:500;display:flex;gap:8px}
 .maptools .btn{background:#000c;min-height:46px}.maptools .btn.pri{background:var(--acc)}
 
+
+/* ---------- Traffic × Time × Danger ---------- */
+.chips.sel{flex-wrap:wrap;overflow:visible;gap:6px;margin-bottom:2px}
+.chips.sel button{min-height:38px;padding:0 11px;border-radius:2px}
+.chips.sel button .mute{font-size:12px;margin-left:5px}
+.chips.sel button.on .mute{color:#080808;opacity:.7}
+/* heat grid: 2px surface gaps between cells, per mark spec */
+.heat{display:grid;grid-template-columns:auto repeat(3,1fr);gap:2px}
+.heat .hh{font-family:var(--disp);font-weight:600;font-size:14px;letter-spacing:.06em;color:var(--mute);text-transform:uppercase;text-align:center;padding:2px 0 4px}
+.heat .rh{font-family:var(--disp);font-weight:600;font-size:15px;letter-spacing:.03em;padding:0 10px 0 0;display:flex;flex-direction:column;justify-content:center;text-align:right;min-width:78px}
+.heat .rh span{font-size:12px;color:var(--mute);font-weight:400;letter-spacing:0}
+.heat .hc{min-height:54px;border:0;border-radius:3px;font-family:var(--disp);font-weight:700;font-size:21px;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;position:relative}
+.heat .hc.thin{background:#161616;color:#4a4a4a;font-size:17px}
+.heat .hc.on{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--acc)}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar{display:grid;grid-template-columns:86px 1fr 46px;align-items:center;gap:10px}
+.bar .bl{font-size:14px;color:#ddd}
+.bar .bt{height:14px;background:#1c1c1c;border-radius:3px;overflow:hidden}
+.bar .bt i{display:block;height:100%;border-radius:0 3px 3px 0}
+.bar .bv{font-family:var(--disp);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;text-align:right}
+.legend{display:flex;flex-direction:column;gap:7px}
+.legend .lg{display:flex;align-items:center;gap:9px;font-size:14px;color:#ddd}
+.legend .lg b{margin-left:auto;font-family:var(--disp);font-size:17px;font-variant-numeric:tabular-nums}
+.legend .lg .mute{min-width:44px;text-align:right;font-size:13px}
+.legend .lgsw{width:12px;height:12px;border-radius:2px;flex:none}
 </style>
 </head>
 <body>
@@ -329,6 +354,9 @@ input[type=range]::-moz-range-thumb{width:18px;height:26px;background:var(--acc)
 
   <!-- 12. SPEED ADVISOR (real-data speed-vs-risk) -->
   <section id="s-speed" class="screen"></section>
+
+  <!-- 13. TRAFFIC x TIME x DANGER (real-data exposure rates) -->
+  <section id="s-traffic" class="screen"></section>
 
   <nav id="tabs" aria-label="Main">
     <button data-tab="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Home</button>
@@ -1443,7 +1471,7 @@ const UI = {
   tabbed: new Set(['home', 'map', 'history', 'status', 'demo', 'settings']),
   go(name) {
     const prev = this.cur; if (prev === 'demo' && name !== 'demo') this.leaveDemo();
-    if (['about', 'danger', 'speed'].includes(name)) this.from = prev === name ? this.from : prev;
+    if (['about', 'danger', 'speed', 'traffic'].includes(name)) this.from = prev === name ? this.from : prev;
     this.cur = name;
     $$('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + name));
     $('#tabs').classList.toggle('on', this.tabbed.has(name));
@@ -1452,7 +1480,7 @@ const UI = {
     if (name === 'live') { this.mountStage($('#liveHost')); this.liveChips(); }
     this.render(name); const el = $('#s-' + name); if (el && prev !== name) el.scrollTop = 0;
   },
-  render(n = this.cur) { const f = { map: () => MapView.open(), home: renderHome, setup: renderSetup, history: renderHistory, status: renderStatus, settings: renderSettings, about: renderAbout, summary: renderSummary, danger: renderDangerZones, speed: renderSpeedAdvisor }[n]; if (f) f(); },
+  render(n = this.cur) { const f = { map: () => MapView.open(), home: renderHome, setup: renderSetup, history: renderHistory, status: renderStatus, settings: renderSettings, about: renderAbout, summary: renderSummary, danger: renderDangerZones, speed: renderSpeedAdvisor, traffic: renderTrafficView }[n]; if (f) f(); },
   mountStage(host) { const st = $('#stage'); if (host && st.parentNode !== host) host.appendChild(st); },
   enterDemo() {
     const busy = Safety.active;
@@ -1567,6 +1595,7 @@ function renderHome() {
     </div>
     <div class="sec">Real-world data insights</div>
     <div class="row" style="gap:10px"><button class="btn grow" data-act="danger-zones">DANGER ZONES</button><button class="btn grow" data-act="speed-advisor">SPEED ADVISOR</button></div>
+    <div class="row" style="gap:10px;margin-top:10px"><button class="btn grow" data-act="traffic-view">TRAFFIC · TIME · DANGER</button></div>
     <p class="small mute" style="margin-top:6px">From ${DANGER_ZONES.meta.nAlertsTotal.toLocaleString()} real alerts logged by an ADAS field-test unit — not this ride.</p>
     <div class="stack" style="margin-top:22px">${notices.join('')}
       ${act ? '<button class="btn pri big" data-act="openlive">OPEN LIVE VIEW</button><button class="btn dng" data-act="end">END SAFETY MODE</button>'
@@ -2023,6 +2052,129 @@ const SpeedAdvisor = {
     el.innerHTML = rows || '<div class="empty">No zone had enough FCW alerts for a per-zone estimate.</div>';
   }
 };
+const TRAFFIC_CUBE = {"meta":{"source":"Real ADAS field-test unit log (Jaipur, Sep 2026) \u2014 trip_2026-09-10.xlsx, \"ADAS + GPS Log\" sheet (the largest sheet: 130,175 rows).","rowsTotal":130175,"rowsNoFix":100449,"rowsUsed":29704,"alertsUsed":5186,"tSpan":["2026-09-10 19:56:03","2026-09-18 15:36:49"],"method":"Rows without a GPS fix (missing or zero lat/lon, or no GPS timestamp) are skipped entirely \u2014 100,449 of 130,175 rows (77%). Traffic density is the log\u2019s \"Objects in Frame\" count, banded at the quartiles of GPS-fixed rows. Exposure is counted in GPS-fixed log rows (~1 per second), so every figure is a RATE per minute of riding, not a raw count \u2014 that is what makes traffic bands comparable despite very different amounts of time spent in each.","bands":["0-1","2-4","5-11","12-19","20+"],"bandNames":["Clear","Light","Moderate","Heavy","Dense"],"types":["fcw","ped","lbs","rbs","lbs+rbs"],"crit":["t0","t1","t2","t3"],"hours":[0,13,14,15,16,17,18,19,20,21,22,23]},"exp":{"0,0":[2004,31752.8,2004],"0,13":[340,1202.2,340],"0,14":[311,2445.3,311],"0,15":[114,2807.6,114],"0,16":[170,400.1,170],"0,17":[282,627.6,282],"0,18":[131,2428.1,131],"0,19":[1103,20095.3,1103],"0,20":[2194,23085.5,2194],"0,21":[2479,32824.5,2479],"0,22":[1161,21475.8,1161],"0,23":[461,9673.9,461],"1,0":[448,10309.2,448],"1,13":[488,1474.5,488],"1,14":[576,4240.1,576],"1,15":[250,1526.6,250],"1,16":[21,129.0,21],"1,17":[250,2092.3,250],"1,18":[184,2660.8,184],"1,19":[605,11673.6,605],"1,20":[1499,14740.1,1499],"1,21":[1305,22345.2,1305],"1,22":[513,9850.9,513],"1,23":[133,2376.2,133],"2,0":[91,2413.9,91],"2,13":[715,11306.1,715],"2,14":[1819,35264.3,1819],"2,15":[402,7415.6,402],"2,16":[10,168.2,10],"2,17":[344,5889.2,344],"2,18":[205,2177.4,205],"2,19":[232,5242.1,232],"2,20":[290,4403.2,290],"2,21":[458,10495.2,458],"2,22":[168,4104.8,168],"2,23":[31,1149.0,31],"3,13":[703,13049.6,703],"3,14":[2813,59391.2,2813],"3,15":[559,14240.2,559],"3,17":[361,4387.3,361],"3,18":[57,587.7,57],"3,19":[6,137.4,6],"3,20":[2,61.5,2],"3,21":[14,395.8,14],"3,22":[8,212.7,8],"4,13":[666,15190.3,666],"4,14":[2006,48238.0,2006],"4,15":[422,10821.1,422],"4,17":[262,4900.2,262],"4,18":[38,633.1,38]},"alerts":{"0,0,0":[0,0,2,2],"0,0,2":[0,0,1,0],"0,0,1":[0,0,1,0],"0,0,3":[0,0,2,0],"0,13,0":[0,0,0,2],"0,13,2":[0,0,0,2],"0,14,0":[1,0,2,1],"0,14,3":[0,4,1,0],"0,15,2":[0,0,2,0],"0,15,4":[0,0,0,1],"0,15,3":[0,0,0,1],"0,16,1":[0,0,3,0],"0,17,0":[0,0,1,0],"0,17,1":[0,0,1,0],"0,18,0":[0,0,0,1],"0,19,0":[0,0,5,5],"0,19,2":[0,0,0,3],"0,19,1":[0,0,1,0],"0,19,3":[0,0,2,1],"0,20,0":[0,0,1,7],"0,20,1":[0,0,1,0],"0,20,3":[0,0,21,4],"0,21,0":[0,0,1,4],"0,21,2":[0,0,4,6],"0,21,1":[0,0,1,0],"0,21,3":[0,2,8,3],"0,22,0":[0,0,0,2],"0,22,2":[0,1,1,2],"0,22,3":[0,0,0,1],"0,23,0":[0,0,1,2],"1,0,0":[0,0,30,9],"1,0,2":[0,0,1,1],"1,0,1":[0,0,1,0],"1,0,3":[0,0,1,1],"1,13,0":[0,0,3,4],"1,13,2":[0,0,1,2],"1,13,3":[0,1,12,9],"1,14,0":[0,0,5,6],"1,14,2":[0,2,2,38],"1,14,4":[0,1,0,0],"1,14,1":[0,0,2,0],"1,14,3":[0,4,1,12],"1,15,0":[0,0,1,3],"1,15,2":[0,3,23,3],"1,15,1":[0,0,4,0],"1,15,3":[0,1,1,13],"1,16,0":[0,0,0,1],"1,17,0":[0,0,7,0],"1,17,1":[0,0,2,0],"1,17,3":[0,0,0,1],"1,18,0":[0,0,5,5],"1,18,2":[0,1,1,2],"1,18,1":[0,0,1,0],"1,18,3":[0,1,2,5],"1,19,0":[0,0,15,14],"1,19,2":[0,0,2,8],"1,19,1":[0,0,2,0],"1,19,3":[0,0,1,3],"1,20,0":[0,0,6,66],"1,20,2":[0,0,3,2],"1,20,1":[0,0,7,0],"1,20,3":[0,2,1,7],"1,21,0":[2,0,22,15],"1,21,2":[0,1,6,6],"1,21,1":[0,0,5,0],"1,21,3":[0,6,18,4],"1,22,0":[0,0,26,15],"1,22,2":[0,3,1,2],"1,22,3":[0,3,3,4],"1,23,0":[0,0,2,0],"1,23,2":[0,0,1,1],"1,23,1":[0,0,1,0],"2,0,0":[0,0,8,7],"2,0,2":[0,0,2,0],"2,0,3":[0,0,1,0],"2,13,0":[0,0,40,37],"2,13,2":[0,1,10,7],"2,13,4":[0,0,0,3],"2,13,1":[0,0,1,0],"2,13,3":[0,15,22,58],"2,14,0":[4,0,119,109],"2,14,2":[0,10,21,56],"2,14,4":[0,0,0,5],"2,14,1":[0,0,30,0],"2,14,3":[0,20,26,79],"2,15,0":[0,0,20,19],"2,15,2":[0,1,18,8],"2,15,1":[0,0,8,0],"2,15,3":[0,4,5,17],"2,17,0":[0,0,25,27],"2,17,1":[0,0,24,0],"2,17,3":[0,1,13,9],"2,18,0":[0,0,6,6],"2,18,2":[0,2,2,3],"2,18,4":[0,0,0,4],"2,18,1":[0,0,2,0],"2,18,3":[0,2,1,6],"2,19,0":[0,0,17,14],"2,19,2":[0,0,2,4],"2,19,4":[0,0,0,1],"2,19,1":[0,0,1,0],"2,19,3":[0,0,0,2],"2,20,0":[0,0,11,3],"2,20,2":[0,0,1,1],"2,20,1":[0,0,7,0],"2,20,3":[0,0,2,1],"2,21,0":[0,0,36,17],"2,21,2":[0,0,4,5],"2,21,1":[0,0,2,0],"2,21,3":[0,2,3,2],"2,22,0":[0,0,9,8],"2,22,2":[0,0,2,3],"2,22,1":[0,0,1,0],"2,22,3":[0,6,3,5],"2,23,0":[0,0,5,2],"3,13,0":[5,0,98,75],"3,13,2":[1,7,10,23],"3,13,4":[0,0,0,1],"3,13,1":[0,0,9,0],"3,13,3":[0,12,14,19],"3,14,0":[7,0,304,284],"3,14,2":[0,21,24,67],"3,14,4":[0,1,0,9],"3,14,1":[0,0,32,0],"3,14,3":[0,68,71,142],"3,15,0":[1,0,77,63],"3,15,2":[0,0,4,10],"3,15,4":[0,0,0,1],"3,15,1":[0,0,3,0],"3,15,3":[0,8,23,28],"3,17,0":[0,0,43,34],"3,17,2":[0,2,1,2],"3,17,1":[0,0,20,0],"3,17,3":[0,3,27,10],"3,18,0":[0,0,2,7],"3,18,2":[0,0,4,5],"3,18,3":[0,0,3,1],"3,19,0":[0,0,1,1],"3,21,0":[0,0,2,3],"3,21,2":[0,0,1,0],"3,21,3":[0,0,0,1],"3,22,0":[0,0,1,0],"3,22,2":[0,0,0,1],"4,13,0":[1,0,136,99],"4,13,2":[0,5,6,12],"4,13,4":[0,0,0,3],"4,13,1":[0,0,8,0],"4,13,3":[0,20,19,34],"4,14,0":[12,0,414,345],"4,14,2":[0,20,28,50],"4,14,4":[0,0,1,6],"4,14,1":[0,0,13,0],"4,14,3":[1,26,34,77],"4,15,0":[4,0,88,65],"4,15,2":[0,5,13,8],"4,15,4":[0,0,0,4],"4,15,1":[0,0,3,0],"4,15,3":[1,8,20,29],"4,17,0":[0,0,44,31],"4,17,2":[0,1,1,5],"4,17,4":[0,0,0,1],"4,17,1":[0,0,2,0],"4,17,3":[0,6,4,5],"4,18,0":[0,0,7,4],"4,18,2":[0,0,2,3],"4,18,1":[0,0,1,0],"4,18,3":[0,0,2,4]}};
+
+/* ---------- Traffic x Time x Danger ----------
+ * Built from the largest sheet of the field log, with every GPS-unfixed row dropped.
+ * Because the sheet also holds rows where NO alert fired, we have exposure, so every
+ * number here is a RATE per minute ridden rather than a raw count. That matters: the
+ * rider spent 3 h in clear traffic and 56 min in dense traffic, so raw counts would
+ * understate dense traffic badly. */
+const TIMEBANDS = [
+  { id: 0, label: 'Afternoon', sub: '12:00–17:00', has: h => h >= 12 && h < 17 },
+  { id: 1, label: 'Evening', sub: '17:00–21:00', has: h => h >= 17 && h < 21 },
+  { id: 2, label: 'Night', sub: '21:00–05:00', has: h => h >= 21 || h < 5 }
+];
+const HEAT = ['#33241A', '#6B4118', '#A65C16', '#DB7715', '#FF9124'];   // single-hue sequential, luminance-monotonic
+const HEATINK = ['#fff', '#fff', '#fff', '#0b0b0b', '#0b0b0b'];          // white fails contrast on the top two steps
+const TYPECOL = ['#3987e5', '#d95926', '#199e70', '#c98500', '#8B8B8B']; // categorical, CVD-validated on this surface
+const TYPENAME = { fcw: 'Front collision', ped: 'Pedestrian', lbs: 'Left blind spot', rbs: 'Right blind spot', 'lbs+rbs': 'Both blind spots' };
+const MINEXP = 90;   // seconds of exposure below which a cell is too thin to quote
+
+const Traffic = {
+  tr: null, tb: null, ty: null, crit: false,     // null = "All" on that axis
+  M() { return TRAFFIC_CUBE.meta; },
+  /* Sum the cube over whatever is NOT filtered out. Returns exposure seconds, alert
+   * count, per-criticality counts, per-type counts and a mean speed. */
+  agg(trFix, tbFix) {
+    const M = this.M(), tr = trFix !== undefined ? trFix : this.tr, tb = tbFix !== undefined ? tbFix : this.tb;
+    let sec = 0, spd = 0, spdN = 0, n = 0, crit = [0, 0, 0, 0], byType = [0, 0, 0, 0, 0], byTr = [0, 0, 0, 0, 0];
+    for (const key in TRAFFIC_CUBE.exp) {
+      const [t, h] = key.split(',').map(Number);
+      if (tr != null && t !== tr) continue;
+      if (tb != null && !TIMEBANDS[tb].has(h)) continue;
+      const e = TRAFFIC_CUBE.exp[key]; sec += e[0]; spd += e[1]; spdN += e[2];
+      for (let ti = 0; ti < M.types.length; ti++) {
+        const a = TRAFFIC_CUBE.alerts[t + ',' + h + ',' + ti]; if (!a) continue;
+        const take = this.crit ? a[3] : a[0] + a[1] + a[2] + a[3];
+        byType[ti] += take;
+        if (this.ty != null && ti !== this.ty) continue;
+        n += take; byTr[t] += take;
+        for (let c = 0; c < 4; c++) crit[c] += a[c];
+      }
+    }
+    return { sec, n, crit, byType, byTr, perMin: sec ? n / (sec / 60) : 0, kmh: spdN ? spd / spdN : null, thin: sec < MINEXP };
+  },
+  cell(t, b) { const s = this.tr, q = this.tb; this.tr = null; this.tb = null; const r = this.agg(t, b); this.tr = s; this.tb = q; return r; },
+  step(v, max) { return max <= 0 ? 0 : Math.min(4, Math.floor((v / max) * 4.999)); },
+  render() {
+    const M = this.M(), all = this.agg();
+    // heat scale from the richest cell so colour is comparable across the grid
+    let max = 0; const cells = [];
+    for (let t = 0; t < 5; t++) for (let b = 0; b < 3; b++) { const c = this.cell(t, b); cells.push(c); if (!c.thin && c.perMin > max) max = c.perMin; }
+    const chip = (act, val, label, on) => `<button data-act="${act}" data-v="${val}" class="${on ? 'on' : ''}">${label}</button>`;
+    const trChips = ['<div class="chips sel">' + chip('tx-tr', '', 'All traffic', this.tr == null) +
+      M.bandNames.map((nm, i) => chip('tx-tr', i, nm + ' <span class="mute">' + M.bands[i] + '</span>', this.tr === i)).join('') + '</div>'].join('');
+    const tbChips = '<div class="chips sel">' + chip('tx-tb', '', 'All day', this.tb == null) +
+      TIMEBANDS.map(b => chip('tx-tb', b.id, b.label + ' <span class="mute">' + b.sub + '</span>', this.tb === b.id)).join('') + '</div>';
+    const tyChips = '<div class="chips sel">' + chip('tx-ty', '', 'All alerts', this.ty == null) +
+      M.types.map((t, i) => chip('tx-ty', i, TYPENAME[t] || t, this.ty === i)).join('') +
+      chip('tx-crit', '', 'Critical only', this.crit) + '</div>';
+
+    // heat grid
+    let grid = '<div class="heat"><div></div>' + TIMEBANDS.map(b => `<div class="hh">${b.label}</div>`).join('');
+    for (let t = 0; t < 5; t++) {
+      grid += `<div class="rh">${M.bandNames[t]}<span>${M.bands[t]}</span></div>`;
+      for (let b = 0; b < 3; b++) {
+        const c = cells[t * 3 + b], on = (this.tr === t && this.tb === b);
+        if (c.thin) { grid += `<div class="hc thin" title="Only ${c.sec}s of riding here — too little to quote">–</div>`; continue; }
+        const st = this.step(c.perMin, max);
+        grid += `<button class="hc${on ? ' on' : ''}" data-act="tx-cell" data-t="${t}" data-b="${b}" style="background:${HEAT[st]};color:${HEATINK[st]}"
+          title="${M.bandNames[t]} traffic, ${TIMEBANDS[b].label}: ${c.perMin.toFixed(1)} alerts/min over ${Math.round(c.sec / 60)} min">${c.perMin.toFixed(1)}</button>`;
+      }
+    }
+    grid += '</div>';
+
+    // bars: alerts/min by traffic band, under the current time/type filter
+    const bars = M.bandNames.map((nm, i) => {
+      const c = this.cell(i, this.tb);
+      if (c.thin) return `<div class="bar"><div class="bl">${nm}</div><div class="bt"><i style="width:0"></i></div><div class="bv mute">thin data</div></div>`;
+      const w = max > 0 ? Math.max(1.5, 100 * c.perMin / max) : 0;
+      return `<div class="bar"><div class="bl">${nm}</div><div class="bt"><i style="width:${w}%;background:${HEAT[this.step(c.perMin, max)]}"></i></div><div class="bv">${c.perMin.toFixed(1)}</div></div>`;
+    }).join('');
+
+    // type split for the current selection, direct-labelled (never colour alone)
+    const tot = all.byType.reduce((s, v) => s + v, 0);
+    const split = M.types.map((t, i) => all.byType[i] ? `<div class="lg"><span class="lgsw" style="background:${TYPECOL[i]}"></span>${esc(TYPENAME[t] || t)}<b>${Math.round(100 * all.byType[i] / tot)}%</b><span class="mute">${all.byType[i]}</span></div>` : '').join('');
+
+    const sel = [this.tr != null ? M.bandNames[this.tr] + ' traffic' : null, this.tb != null ? TIMEBANDS[this.tb].label : null,
+      this.ty != null ? (TYPENAME[M.types[this.ty]] || M.types[this.ty]) : null, this.crit ? 'critical only' : null].filter(Boolean);
+
+    $('#txBody').innerHTML = `
+      <div class="hero brk ${all.perMin > 15 ? 'lv4' : all.perMin > 6 ? 'lv3' : all.perMin > 2 ? 'lv2' : 'safe'}" style="margin-bottom:6px">
+        <div class="word" style="font-size:44px">${all.thin ? '—' : all.perMin.toFixed(1)}</div>
+        <div class="cap">alerts per minute ridden${sel.length ? ' · ' + esc(sel.join(' · ')) : ' · whole dataset'}</div></div>
+      <p class="legal" style="margin-bottom:14px">${all.sec ? Math.round(all.sec / 60) + ' min of GPS-fixed riding · ' + all.n + ' alerts' + (all.kmh != null ? ' · avg ' + all.kmh.toFixed(1) + ' km/h' : '') : 'No data for this combination.'}</p>
+      <div class="sec">Traffic density <span class="mute" style="text-transform:none">— objects in frame</span></div>${trChips}
+      <div class="sec">Time of day</div>${tbChips}
+      <div class="sec">Danger</div>${tyChips}
+      <div class="sec">Alerts per minute — traffic × time</div>
+      <p class="legal" style="margin:-2px 0 10px">Tap a cell to filter everything to it. Darker is calmer, brighter is busier. “–” means under ${MINEXP}s of riding in that combination.</p>
+      ${grid}
+      <div class="sec">By traffic band${this.tb != null ? ' · ' + TIMEBANDS[this.tb].label : ''}</div>
+      <div class="bars">${bars}</div>
+      <div class="sec">Alert mix for this selection</div>
+      <div class="legend">${split || '<p class="mute">No alerts in this selection.</p>'}</div>`;
+  }
+};
+function renderTrafficView() {
+  const M = TRAFFIC_CUBE.meta;
+  $('#s-traffic').innerHTML = `<button class="backbtn" data-act="txback">‹ Back</button><h1 class="h1">Traffic · Time · Danger</h1>
+    <p class="legal" style="margin:10px 0 14px">${esc(M.source)}</p>
+    <div id="txBody"></div>
+    <div class="notice" style="margin-top:18px"><b>What the data actually shows:</b> traffic density drives the alert rate — it climbs from
+      0.7 to 30.8 alerts per minute from clear to dense traffic, a 45× change. Time of day looks almost as strong, but it is mostly a
+      <i>proxy</i> for traffic: hold traffic fixed and the afternoon/evening/night columns nearly match (heavy traffic gives 22.4 vs 23.4 alerts
+      per minute, afternoon vs evening). Riding at night is calmer because the roads are emptier, not because darkness is safer.</div>
+    <p class="legal" style="margin-top:14px">${esc(M.method)}</p>
+    <p class="legal" style="margin-top:10px"><b>Limits.</b> One unit, one rider, ${M.tSpan[0].slice(0, 10)} to ${M.tSpan[1].slice(0, 10)}, and the log covers
+      only hours 13:00–00:00 — there is no morning data at all, so “time of day” here means afternoon through night. “Objects in frame” counts what the
+      detector saw, so it measures <i>perceived</i> traffic and inherits the detector’s misses. Alert rate is not crash rate, and this sheet carries no
+      true/false-positive review, so some alerts in it are false alarms.</p>
+    <div class="stack" style="margin-top:22px"><button class="btn" data-act="txback">BACK</button></div>`;
+  Traffic.render();
+}
+
 function renderSpeedAdvisor() {
   const g = SPEED_ADVISOR.meta.global, m = SPEED_ADVISOR.meta;
   $('#s-speed').innerHTML = `<button class="backbtn" data-act="speedback">‹ Back</button><h1 class="h1">Speed Advisor</h1>
@@ -2115,6 +2267,13 @@ document.addEventListener('click', async e => {
     case 'speed-advisor': UI.go('speed'); break;
     case 'speedback': UI.go(UI.from || 'home'); break;
     case 'speed-select': SpeedAdvisor.select(+d.zone); break;
+    case 'traffic-view': UI.go('traffic'); break;
+    case 'txback': UI.go(UI.from || 'home'); break;
+    case 'tx-tr': Traffic.tr = d.v === '' ? null : +d.v; Traffic.render(); break;
+    case 'tx-tb': Traffic.tb = d.v === '' ? null : +d.v; Traffic.render(); break;
+    case 'tx-ty': Traffic.ty = d.v === '' ? null : +d.v; Traffic.render(); break;
+    case 'tx-crit': Traffic.crit = !Traffic.crit; Traffic.render(); break;
+    case 'tx-cell': { const ct = +d.t, cb = +d.b, same = Traffic.tr === ct && Traffic.tb === cb; Traffic.tr = same ? null : ct; Traffic.tb = same ? null : cb; Traffic.render(); break; }
     case 'devcheck': deviceCheck(); break;
     case 'testvoice': Voice.unlock(); Voice.say('Purnansh ADAS voice alert test.', 2, true); break;
     case 'resetsetup': Settings.set('setupDone', false); Setup.i = 0; Setup.res = {}; $('#s-setup')._k = ''; UI.go('setup'); break;
