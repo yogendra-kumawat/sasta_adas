@@ -1,36 +1,50 @@
 # PURNANSH ADAS
 
-Single-file smartphone ADAS prototype. Open `index.html` — everything (CSS, JS, and the
-on-device detection model) is embedded, so there is nothing to build and no dependencies
-to install.
+Smartphone-based rider assistance prototype. Vehicle and pedestrian detection runs
+on-device with **YOLO11n** (Ultralytics, COCO-80) via onnxruntime-web.
 
-## Publishing on GitHub Pages
+    index.html              the whole app (242 KB) — UI, risk engine, real field data
+    models/yolo11n.onnx     detection weights (10.2 MB), fetched at runtime
+    .nojekyll               serve files verbatim, no Jekyll processing
+
+`index.html` loads `models/yolo11n.onnx` by **relative path**, so the `models/` folder must
+stay next to it. Renaming or flattening the folder breaks detection — the Status screen will
+say so explicitly rather than failing silently.
+
+## GitHub Pages
 
     git init
-    git add index.html .nojekyll README.md
-    git commit -m "Purnansh ADAS prototype"
+    git add index.html models/yolo11n.onnx .nojekyll README.md
+    git commit -m "Purnansh ADAS"
     git branch -M main
     git remote add origin https://github.com/<you>/<repo>.git
     git push -u origin main
 
-Then: repo -> **Settings -> Pages -> Source: Deploy from a branch -> main / (root) -> Save**.
-Wait for the green check on the Pages deployment, then open
-`https://<you>.github.io/<repo>/`.
+Then **Settings → Pages → Deploy from a branch → main / (root)**, wait for the green check,
+and open `https://<you>.github.io/<repo>/`.
 
-The file MUST be named `index.html` for that root URL to work. If you keep the original
-name instead, the URL is `https://<you>.github.io/<repo>/purnansh-adas.html`.
-
-`.nojekyll` tells Pages to serve files verbatim rather than running them through Jekyll.
+The model is 10.2 MB — fine for Pages (100 MB/file limit) and for a normal `git push`, no
+Git LFS needed.
 
 ## Why it must be served over HTTPS
 
-The camera, GPS and motion sensors are only available in a **secure context**. GitHub Pages
-serves over HTTPS, so permissions work there. Opening the same file from `file://` silently
-denies all three — that is a browser rule, not a bug in the app.
+Camera, GPS and motion sensors only exist in a **secure context**. GitHub Pages is HTTPS, so
+they work there. Opening this from `file://` silently denies all three — a browser rule, not
+an app bug. For local testing use `python3 -m http.server 8000` and `http://localhost:8000/`.
+
+## Network use
+
+- **onnxruntime-web** (~3 MB) from jsDelivr, once, then browser-cached. The model itself is
+  local. Without the runtime, detection is unavailable and the app falls back to GPS and
+  motion alerts only.
+- **Esri** dark basemap tiles, for the Map and Danger Zones screens.
+- **Overpass API**, for road names and speed limits.
 
 ## Notes
 
-- The base map uses CARTO's dark tiles (Esri fallback). It does not use
-  `tile.openstreetmap.org`, whose usage policy blocks unidentified clients with HTTP 403.
-- Road names and speed limits come from the Overpass API and need network access.
-- This is an experimental prototype, not a certified safety system.
+- Detection classes used: person, bicycle, car, motorcycle, bus, truck, plus a few animal
+  and object classes treated as obstacles. Potholes and debris are NOT detected.
+- Vehicle warnings additionally require the vehicle to be in your path and require rider
+  motion, so standing still and pointing the phone at a car is correctly silent. The
+  "Tracking" line in the live view shows what the detector sees regardless of warnings.
+- Experimental prototype. Not a certified safety system.
